@@ -30,6 +30,9 @@
 .PARAMETER Fresh
     Move the saved settings, secrets and models aside first, to see first-run behaviour.
 
+.PARAMETER Design
+    Also start the design agent (AI Office\design-agent, http://127.0.0.1:9740) that the Design page talks to.
+
 .PARAMETER Save
     Headless: write the deployment record for the project and stop (no window).
 
@@ -52,7 +55,8 @@ param(
     [switch] $NoSolidcraft,
     [switch] $Release,
     [switch] $Fresh,
-    [switch] $Save
+    [switch] $Save,
+    [switch] $Design
 )
 
 $ErrorActionPreference = 'Stop'
@@ -119,6 +123,18 @@ if (Test-Path $solid) {
     Say "Solidcraft: $solid" 'Green'
 } else {
     Say 'No solidcraft.exe yet: set its path in the model Details, or re-run without -NoSolidcraft.' 'Yellow'
+}
+
+# The design agent, when asked for and not already answering.
+if ($Design) {
+    $agent = Join-Path (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $root))) 'Projects\AI Office\design-agent'
+    $up = $false
+    try { $up = (Invoke-RestMethod -Uri 'http://127.0.0.1:9740/api/health' -TimeoutSec 2).ok } catch { }
+    if ($up) { Say 'Design agent already running on 9740.' 'Green' }
+    elseif (Test-Path (Join-Path $agent 'server.mjs')) {
+        Start-Process -FilePath 'node' -ArgumentList 'server.mjs' -WorkingDirectory $agent -WindowStyle Minimized
+        Say "Design agent started: $agent" 'Green'
+    } else { Say "Design agent not found at $agent" 'Yellow' }
 }
 
 # Close a bridge that is already open, so the build can be replaced.

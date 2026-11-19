@@ -120,6 +120,7 @@ impl App {
             Page::Databases => self.page_databases(ui),
             Page::Documents => self.page_documents(ui),
             Page::IoBuilder => self.page_io(ui),
+            Page::Design => self.page_design(ui),
         });
     }
 
@@ -388,7 +389,8 @@ impl App {
                 if use_it {
                     let id = c.id.clone();
                     self.settings.active_link = if c.protocol == Protocol::Simulated { None } else { Some(id) };
-                    self.poller = None;
+                    self.pollers.clear();
+                    self.live_by.clear();
                 }
             }
             if remove {
@@ -627,6 +629,8 @@ impl App {
             ui.label(RichText::new("Model").heading());
             ui.label(RichText::new("The machine as parts and joints, built from the sizes in Equipment. Each joint follows a PLC signal.").color(DIM));
         });
+        self.job_panel(ui);
+        ui.add_space(6.0);
         let Some(plan) = self.plan.clone() else {
             ui.add_space(20.0);
             ui.label(RichText::new("No model yet: the limit sensors give no X and Y lengths. See Equipment.").color(DIM));
@@ -668,7 +672,8 @@ impl App {
                     let v = eff.and_then(|b| self.live.get(&b.key)).map(|v| v.show()).unwrap_or_else(|| "\u{2014}".into());
                     ui.label(RichText::new(v).color(INFO));
                     if simulated {
-                        let e = self.pose.entry(j.name.clone()).or_insert(0.0);
+                        let rest = ittoot_bridge::devices::rest_position(&plan, j.axis_index);
+                        let e = self.pose.entry(j.name.clone()).or_insert(rest);
                         ui.add(egui::Slider::new(e, j.limits.0..=j.limits.1).show_value(true));
                     } else {
                         ui.label(RichText::new("the PLC drives it").color(DIM).size(12.0));
@@ -681,6 +686,45 @@ impl App {
             self.settings.bindings.insert(joint, key);
         }
 
+        // the devices: what each motor, sensor and peripheral shows, with its colour and a number
+        ui.add_space(8.0);
+        let colours: HashMap<String, Color32> = ittoot_bridge::devices::body_colours(&plan, &self.shades).into_iter().map(|(n, c)| (n, Color32::from_rgb(c[0], c[1], c[2]))).collect();
+        let simulated_now = self.settings.active_link.is_none();
+        panel(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new("Devices").strong());
+                ui.label(RichText::new("Motors red = off or at a limit, green = moving, blue = ready. Limit sensors white = clear, red = active. Station sensors white = away, green = at position. Peripherals white = idle, green = active, red = fault.").color(DIM).size(12.0));
+            });
+            if simulated_now {
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut self.demo_on, "Run the demo cycle (no PLC connected: a simulated transport visits each station, lowers the hoist, then drives into the high limit)");
+                });
+            }
+            ui.horizontal_wrapped(|ui| {
+                if !self.design_msg.is_empty() {
+                    ui.label(RichText::new(&self.design_msg).color(DIM).size(12.0));
+                }
+            });
+            ui.add_space(4.0);
+            egui::Grid::new("devices").num_columns(5).spacing([14.0, 4.0]).show(ui, |ui| {
+                for h in ["", "Device", "Kind", "State", "Number"] {
+                    ui.label(RichText::new(h).color(DIM).size(12.0).strong());
+                }
+                ui.end_row();
+                for s in &self.shades {
+                    let c = Color32::from_rgb(s.rgb[0], s.rgb[1], s.rgb[2]);
+                    let (r, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), Sense::hover());
+                    ui.painter().circle_filled(r.center(), 7.0, c);
+                    ui.painter().circle_stroke(r.center(), 7.0, Stroke::new(1.0, LINE));
+                    ui.label(RichText::new(&s.name).strong());
+                    ui.label(RichText::new(s.kind.label()).color(DIM));
+                    ui.label(RichText::new(&s.state).color(c));
+                    ui.label(RichText::new(&s.number).color(INFO));
+                    ui.end_row();
+                }
+            });
+        });
+
         // the live picture
         ui.add_space(8.0);
         let h = 230.0;
@@ -688,8 +732,8 @@ impl App {
         let pose: HashMap<String, f64> = plan.joints.iter().map(|j| (j.name.clone(), self.joint_value(&j.name).unwrap_or(0.0).clamp(j.limits.0, j.limits.1))).collect();
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 12.0;
-            scene(ui, w, h, &plan, &pose, true);
-            scene(ui, w, h, &plan, &pose, false);
+            scene(ui, w, h, &plan, &pose, true, &colours);
+            scene(ui, w, h, &plan, &pose, false, &colours);
         });
 
         // Solidcraft: one panel per model target, with + for another
@@ -794,6 +838,19 @@ impl App {
                         ui.checkbox(&mut m.cpu_render, "for a PC whose graphics card cannot be read back");
                         ui.end_row();
                     }
+                    ui.label("Model project");
+                    let shown = if m.model_project.is_empty() { "the one the page works on".to_string() } else { m.model_project.clone() };
+                    egui::ComboBox::from_id_salt(("model-of", m.id.clone())).width(320.0).selected_text(shown).show_ui(ui, |ui| {
+                        if ui.selectable_label(m.model_project.is_empty(), "the one the page works on").clicked() {
+                            m.model_project.clear();
+                        }
+                        for mp in &self.model_projects {
+                            if ui.selectable_label(m.model_project == mp.name, &mp.name).clicked() {
+                                m.model_project = mp.name.clone();
+                            }
+                        }
+                    });
+                    ui.end_row();
                     ui.label("Notes");
                     ui.add_sized([520.0, 24.0], egui::TextEdit::singleline(&mut m.notes));
                     ui.end_row();
@@ -887,9 +944,10 @@ impl App {
             ModelAct::Build => {
                 // the record first, so the journal of this build sits beside what it was built from
                 self.export_msg = self.save_deployment(&plan);
+                let script = self.build_for(&m.id);
                 if let Some(r) = self.runs.get_mut(&m.id) {
                     if let Some(s) = &r.link {
-                        s.send(work::PushMsg::Build(plan.commands()));
+                        s.send(work::PushMsg::Build(script));
                     }
                     r.status = "building...".into();
                 }
@@ -916,6 +974,7 @@ impl App {
     /// The same, for one model: the first keeps the plain folder, others add their id, so models never share a journal.
     pub fn deployment_dir_for(&self, model: &str) -> std::path::PathBuf {
         let first = self.settings.models.first().is_none_or(|m| m.id == model);
+        let own = self.settings.models.iter().find(|m| m.id == model).map(|m| m.model_project.clone()).filter(|p| !p.is_empty());
         let name = self
             .settings
             .projects
@@ -924,6 +983,10 @@ impl App {
             .unwrap_or_else(|| "model".to_string());
         let safe: String = name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' }).collect();
         let safe = if first { safe } else { format!("{safe}__{}", model.replace(|c: char| !c.is_alphanumeric(), "_")) };
+        // in the job's folder when there is a job number: Models\<model project>\deployment (another Solidcraft adds its id)
+        if let Some(d) = ittoot_bridge::job::deployment_dir(&self.settings.job, own.as_deref().or(self.settings.model_project.as_deref()).unwrap_or("Default")) {
+            return if first { d } else { d.join(model.replace(|c: char| !c.is_alphanumeric(), "_")) };
+        }
         crate::data_dir().join("deployments").join(safe)
     }
 
@@ -939,6 +1002,7 @@ impl App {
             plan,
             bindings: &self.bindings,
             solidcraft_version: env!("CARGO_PKG_VERSION"),
+            job: &self.settings.job.title(),
         });
         match d.save(&dir) {
             Ok(_) => format!("Deployment record saved in {}: deployment.json, model-script.json, REBUILD.txt (journal.jsonl grows as the model is built in Solidcraft).", dir.display()),
@@ -947,7 +1011,7 @@ impl App {
     }
 
     /// The joint's value now: from its signal, else the simulated pose.
-    fn joint_value(&self, joint: &str) -> Option<f64> {
+    pub fn joint_value(&self, joint: &str) -> Option<f64> {
         let plan = self.plan.as_ref()?;
         let eff = self.bindings.iter().find(|b| b.joint == joint)?;
         let drive = model::drive_commands(plan, std::slice::from_ref(eff), &self.live);
@@ -1126,7 +1190,7 @@ fn short(path: &str) -> String {
 }
 
 /// The machine at its present pose: a top view (X across, Y up) or a side view (X across, Z down).
-fn scene(ui: &mut Ui, w: f32, h: f32, plan: &ModelPlan, pose: &HashMap<String, f64>, top: bool) {
+fn scene(ui: &mut Ui, w: f32, h: f32, plan: &ModelPlan, pose: &HashMap<String, f64>, top: bool, colours: &HashMap<String, Color32>) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(w, h), Sense::hover());
     let p = ui.painter_at(rect);
     p.rect_filled(rect, 0.0, BG2);
@@ -1138,10 +1202,10 @@ fn scene(ui: &mut Ui, w: f32, h: f32, plan: &ModelPlan, pose: &HashMap<String, f
     let s = ((area.width() as f64) / ex).min((area.height() as f64) / vertical) as f32;
     let size = egui::vec2(ex as f32 * s, vertical as f32 * s);
     let o = egui::Rect::from_min_size(area.left_top() + egui::vec2((area.width() - size.x) / 2.0, (area.height() - size.y) / 2.0), size);
-    let x0 = model::GIRDER_OVERRUN; // the world X of the envelope's left edge is -overrun
+    let (x0, y0) = (-plan.origin[0], -plan.origin[1]); // the model's lower-left corner in the world
     let at = |wx: f64, wy: f64, wz: f64| {
         let px = o.left() + ((wx + x0) as f32) * s;
-        let py = if top { o.bottom() - ((wy + model::GIRDER_WIDTH) as f32) * s } else { o.bottom() - (wz as f32) * s };
+        let py = if top { o.bottom() - ((wy + y0) as f32) * s } else { o.bottom() - (wz as f32) * s };
         egui::pos2(px, py)
     };
     let get = |n: &str| plan.joints.iter().find(|j| j.letter.to_string() == n).and_then(|j| pose.get(&j.name)).copied().unwrap_or(0.0);
@@ -1149,9 +1213,14 @@ fn scene(ui: &mut Ui, w: f32, h: f32, plan: &ModelPlan, pose: &HashMap<String, f
     let draw = |b: &model::Body, dx: f64, dy: f64, dz: f64, c: Color32| {
         let a = at(b.corner[0] + dx, b.corner[1] + dy, b.corner[2] + dz);
         let z = at(b.corner[0] + dx + b.size[0], b.corner[1] + dy + b.size[1], b.corner[2] + dz + b.size[2]);
-        let r = egui::Rect::from_two_pos(a, z);
-        p.rect_filled(r, 0.0, c.gamma_multiply(0.55));
-        p.rect_stroke(r, 0.0, Stroke::new(1.0, c), egui::StrokeKind::Inside);
+        let mut r = egui::Rect::from_two_pos(a, z);
+        // a device is drawn solid and never smaller than a few pixels, so it can always be found
+        let device = plan.devices.iter().any(|d| d.body == b.name);
+        if device {
+            r = egui::Rect::from_center_size(r.center(), egui::vec2(r.width().max(7.0), r.height().max(7.0)));
+        }
+        p.rect_filled(r, 0.0, if device { c } else { c.gamma_multiply(0.55) });
+        p.rect_stroke(r, 0.0, Stroke::new(if device { 1.5 } else { 1.0 }, if device { FG } else { c }), egui::StrokeKind::Inside);
     };
     // floor
     if !top {
@@ -1166,7 +1235,7 @@ fn scene(ui: &mut Ui, w: f32, h: f32, plan: &ModelPlan, pose: &HashMap<String, f
             _ => (0.0, 0.0, 0.0, ACCENT),
         };
         for b in &part.bodies {
-            draw(b, dx, dy, dz, c);
+            draw(b, dx, dy, dz, colours.get(&b.name).copied().unwrap_or(c));
         }
     }
 }

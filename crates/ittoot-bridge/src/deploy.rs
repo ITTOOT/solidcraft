@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 pub const RECORD_VERSION: u32 = 1;
 
 /// The Solidcraft commands the bridge sends. A record that needs any other is refused by `verify`.
-pub const KNOWN_COMMANDS: &[&str] = &["solid.box", "component.create", "component.move_bodies", "occurrence.ground", "joint.create", "joint.drive"];
+pub const KNOWN_COMMANDS: &[&str] = &["solid.box", "component.create", "component.move_bodies", "occurrence.ground", "joint.create", "joint.drive", "appearance.assign"];
 
 /// What the bridge needs of Solidcraft.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -60,6 +60,9 @@ pub struct BindingRecord {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Deployment {
     pub record_version: u32,
+    /// The job title (type, number, optional name) the record was made under.
+    #[serde(default)]
+    pub job: String,
     /// Seconds since 1970; the record does not depend on a calendar crate.
     pub created_unix: u64,
     pub bridge_version: String,
@@ -90,6 +93,8 @@ pub struct Inputs<'a> {
     pub bindings: &'a [ModelBinding],
     /// The Solidcraft version in use (the bridge is built from the same workspace).
     pub solidcraft_version: &'a str,
+    /// The job title (number and optional name) the record is made under.
+    pub job: &'a str,
 }
 
 pub fn now_unix() -> u64 {
@@ -106,6 +111,7 @@ impl Deployment {
         Deployment {
             record_version: RECORD_VERSION,
             created_unix: now_unix(),
+            job: i.job.to_string(),
             bridge_version: env!("CARGO_PKG_VERSION").to_string(),
             solidcraft: SolidcraftNeeds { version: i.solidcraft_version.to_string(), commands: used, channel: "control channel: engine.execute".into() },
             projects: i.projects.to_vec(),
@@ -161,7 +167,7 @@ impl Deployment {
     pub fn rebuild_text(&self, folder: &Path) -> String {
         let script = folder.join("model-script.json");
         let mut t = String::new();
-        t.push_str("Rebuild this model\n==================\n\n");
+        t.push_str(&format!("{}\n\n", if self.job.is_empty() { "Rebuild this model".to_string() } else { format!("{}: rebuild this model", self.job) }));
         t.push_str(&format!("Made by bridge {} for Solidcraft {}.\n\n", self.bridge_version, self.solidcraft.version));
         t.push_str("1. Headless, to a STEP file and a picture:\n\n");
         t.push_str(&format!("   solidcraft-cli run \"{}\" --out model.step --save model.sc\n", script.display()));
@@ -243,7 +249,7 @@ mod tests {
     #[test]
     fn a_record_saves_loads_and_says_how_to_rebuild() {
         let (inf, p, b) = state();
-        let d = Deployment::from_state(&Inputs { projects: &["x.ap18".into()], document_folders: &[], roles_from: "", roles: &[], inference: &inf, plan: &p, bindings: &b, solidcraft_version: "0.44.0" });
+        let d = Deployment::from_state(&Inputs { projects: &["x.ap18".into()], document_folders: &[], roles_from: "", roles: &[], inference: &inf, plan: &p, bindings: &b, solidcraft_version: "0.44.0", job: "Plating Line J-1" });
         let dir = std::env::temp_dir().join(format!("ittoot-bridge-deploy-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         d.save(&dir).unwrap();
@@ -262,7 +268,7 @@ mod tests {
     #[test]
     fn a_record_with_an_unknown_command_or_joint_is_refused() {
         let (inf, p, b) = state();
-        let mut d = Deployment::from_state(&Inputs { projects: &[], document_folders: &[], roles_from: "", roles: &[], inference: &inf, plan: &p, bindings: &b, solidcraft_version: "0.44.0" });
+        let mut d = Deployment::from_state(&Inputs { projects: &[], document_folders: &[], roles_from: "", roles: &[], inference: &inf, plan: &p, bindings: &b, solidcraft_version: "0.44.0", job: "Plating Line J-1" });
         assert!(d.verify().is_ok());
         d.commands.push(json!({"command":"file.delete","params":{}}));
         assert!(d.verify().unwrap_err().to_string().contains("file.delete"));

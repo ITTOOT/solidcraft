@@ -3680,6 +3680,7 @@ dependencies = [
  "ittoot-opcua",
  "serde_json",
  "solidcraft-control",
+ "ureq",
  "windows",
 ]
 

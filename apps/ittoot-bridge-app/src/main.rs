@@ -3,6 +3,10 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+mod designpage;
+mod jobpage;
+mod multi;
+mod designwork;
 mod iopage;
 mod iowork;
 mod pages;
@@ -24,7 +28,7 @@ use ittoot_bridge::settings::BridgeSettings;
 use ittoot_bridge::table::Table;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use work::{Job, PollMsg, Poller};
+use work::{Job, Poller};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Page {
@@ -36,10 +40,11 @@ pub enum Page {
     Databases,
     Documents,
     IoBuilder,
+    Design,
 }
 
 impl Page {
-    const ALL: [(Page, &'static str, &'static str); 8] = [
+    const ALL: [(Page, &'static str, &'static str); 9] = [
         (Page::Settings, "Settings", "settings"),
         (Page::Connections, "Connections", "connections"),
         (Page::Tables, "Tables", "tables"),
@@ -48,6 +53,7 @@ impl Page {
         (Page::Databases, "Databases", "databases"),
         (Page::Documents, "Documents", "documents"),
         (Page::IoBuilder, "IO Builder", "io"),
+        (Page::Design, "Design", "design"),
     ];
 }
 
@@ -69,6 +75,13 @@ struct Shot {
     result: std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<egui::ColorImage>>>>,
 }
 
+/// design.json and model-script.json of a design agent project folder.
+pub(crate) fn load_design_dir(dir: &std::path::Path) -> Option<(serde_json::Value, Vec<serde_json::Value>)> {
+    let design: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(dir.join("design.json")).ok()?).ok()?;
+    let script: Vec<serde_json::Value> = serde_json::from_str(&std::fs::read_to_string(dir.join("model-script.json")).ok()?).ok()?;
+    Some((design, script))
+}
+
 pub struct App {
     pub settings: BridgeSettings,
     pub settings_path: Option<PathBuf>,
@@ -88,7 +101,12 @@ pub struct App {
     pub active_table: usize,
     pub filter: String,
     pub live: HashMap<String, Value>,
-    pub poller: Option<Poller>,
+    /// One poller for each PLC connection in use, the values each last gave, and each one's state.
+    pub pollers: HashMap<String, Poller>,
+    pub live_by: HashMap<String, HashMap<String, ittoot_bridge::driver::Value>>,
+    pub link_states: HashMap<String, LinkState>,
+    /// The models of Solidcrafts that show a model project other than the page's.
+    pub slots: HashMap<String, multi::Slot>,
     pub link_state: LinkState,
     pub inference: Inference,
     pub intake: Intake,
@@ -113,11 +131,45 @@ pub struct App {
     /// One entry per model target, by id: its Solidcraft process, link and status.
     pub runs: HashMap<String, ModelRun>,
     pub io: iopage::IoState,
+    pub design: designpage::DesignState,
     /// The model list as last written, to save only when it changes.
     pub models_saved: String,
     /// `--go`: press Start, then Build, then follow the machine, as a person would (0 off, 1 start, 2 build, 3 done).
     pub autorun: u8,
     pub last_push: std::time::Instant,
+    /// The simulated machine's demo cycle, when switched on and no PLC is connected.
+    pub demo_on: bool,
+    /// `--shot-delay S`: wait this long (live links need time) before taking the picture.
+    pub shot_delay: f64,
+    pub started: std::time::Instant,
+    /// The design agent's model the PLC's transport runs on (design.json, model-script.json), and what the plan was built from.
+    pub design_model: Option<(serde_json::Value, Vec<serde_json::Value>)>,
+    pub design_stamp: u64,
+    pub design_job: Option<Job<Result<(serde_json::Value, Vec<serde_json::Value>, String), String>>>,
+    pub design_msg: String,
+    /// The job's model projects, the one in use, and what is being typed for a new one.
+    pub model_projects: Vec<ittoot_bridge::job::ModelProject>,
+    pub models_key: String,
+    pub active_kind: ittoot_bridge::job::ModelKind,
+    pub scratch: Vec<ittoot_bridge::job::FreeBinding>,
+    pub scratch_dirty: bool,
+    pub new_model_name: String,
+    pub job_msg: String,
+    pub model_applied: bool,
+    /// The name of the design model being made (saved as a model project when the agent has answered).
+    pub pending_model: String,
+    pub plan_build_key: String,
+    /// `--cycle-at S`: run the demo this many seconds ahead before the first frame (for screenshots).
+    pub demo_skip: f64,
+    pub demo: Option<ittoot_bridge::demo::Demo>,
+    pub demo_at: std::time::Instant,
+    /// What every device shows now, and the colours last sent to each Solidcraft.
+    pub shades: Vec<ittoot_bridge::devices::Shade>,
+    pub colour_sent: String,
+    /// Each axis' last seen position and when it changed, and when it last moved (for its speed).
+    pub track: HashMap<i64, (f64, std::time::Instant)>,
+    pub moved_at: HashMap<i64, std::time::Instant>,
+    pub speeds: HashMap<i64, f64>,
     pub export_msg: String,
     pub pending_table: Option<String>,
     shot: Option<Shot>,
@@ -164,7 +216,10 @@ impl App {
             active_table: 0,
             filter: String::new(),
             live: HashMap::new(),
-            poller: None,
+            pollers: HashMap::new(),
+            live_by: HashMap::new(),
+            link_states: HashMap::new(),
+            slots: HashMap::new(),
             link_state: LinkState::Disconnected,
             inference: Inference::default(),
             intake: Intake::default(),
@@ -187,9 +242,35 @@ impl App {
             pose: HashMap::new(),
             runs: HashMap::new(),
             io: iopage::IoState::default(),
+            design: designpage::DesignState::default(),
             models_saved: String::new(),
             autorun: 0,
             last_push: std::time::Instant::now(),
+            demo_on: false,
+            shot_delay: 0.0,
+            started: std::time::Instant::now(),
+            design_model: None,
+            design_stamp: 0,
+            design_job: None,
+            design_msg: String::new(),
+            model_projects: Vec::new(),
+            models_key: String::from("?"),
+            active_kind: Default::default(),
+            scratch: Vec::new(),
+            scratch_dirty: false,
+            new_model_name: String::new(),
+            job_msg: String::new(),
+            model_applied: false,
+            pending_model: String::new(),
+            plan_build_key: String::new(),
+            demo_skip: 0.0,
+            demo: None,
+            demo_at: std::time::Instant::now(),
+            shades: Vec::new(),
+            colour_sent: String::new(),
+            track: HashMap::new(),
+            moved_at: HashMap::new(),
+            speeds: HashMap::new(),
             export_msg: String::new(),
             pending_table: None,
             shot: None,
@@ -253,7 +334,7 @@ impl App {
             }
         }
         if self.settings.areas.is_empty() {
-            let d = auto_config(&self.settings.projects, &[], ScanLimits::default());
+            let d = work::scan_projects(&self.settings.projects, &[]);
             self.finish_auto(d);
         }
     }
@@ -261,11 +342,12 @@ impl App {
     pub fn start_auto(&mut self) {
         let projects = self.settings.projects.clone();
         self.auto_msg = "Scanning...".into();
-        self.auto_job = Some(Job::spawn(move || auto_config(&projects, &[], ScanLimits::default())));
+        self.auto_job = Some(Job::spawn(move || work::scan_projects(&projects, &[])));
     }
 
     fn finish_auto(&mut self, d: Discovery) {
         let (added, removed) = self.settings.merge_auto(d.areas());
+        self.settings.apply_links();
         let c = d.candidates.iter().filter(|c| c.area.role == AreaRole::Controls).count();
         let m = d.candidates.len() - c;
         self.auto_msg = format!("Found {} data areas ({c} controls, {m} management). {added} added, {removed} no longer found.", d.candidates.len());
@@ -274,7 +356,7 @@ impl App {
     }
 
     fn areas_key(&self) -> String {
-        self.settings.areas.iter().filter(|a| a.enabled).map(|a| format!("{:?}|{:?}|{}", a.role, a.kind, a.source)).collect::<Vec<_>>().join("\n")
+        self.settings.areas.iter().filter(|a| a.enabled).map(|a| format!("{:?}|{:?}|{}|{:?}", a.role, a.kind, a.source, a.connection)).collect::<Vec<_>>().join("\n")
     }
 
     fn save(&mut self) {
@@ -363,52 +445,48 @@ impl App {
                 Err(e) => self.db.message = e,
             }
         }
-        self.pump_link();
-        self.pump_solid();
-        if self.build_job.is_some() || self.auto_job.is_some() || self.intake_job.is_some() || !self.test_jobs.is_empty() || self.db.list_job.is_some() || self.db.page_job.is_some() || self.poller.is_some() || !self.runs.is_empty() || self.io.job.is_some() {
-            ctx.request_repaint_after(std::time::Duration::from_millis(150));
+        if let Some(r) = self.design_job.as_ref().and_then(Job::poll) {
+            self.design_job = None;
+            match r {
+                Ok((d, s, folder)) => {
+                    self.design_msg = format!("Model from the design agent loaded ({folder}).");
+                    self.design_model = Some((d, s));
+                    self.design_stamp += 1;
+                    self.settings.design_model_dir = folder.clone();
+                    if !self.pending_model.is_empty() {
+                        let mp = ittoot_bridge::job::ModelProject { name: std::mem::take(&mut self.pending_model), kind: ittoot_bridge::job::ModelKind::Design, design_dir: folder, plc_project: self.settings.projects.first().cloned().unwrap_or_default(), ..Default::default() };
+                        let name = mp.name.clone();
+                        match ittoot_bridge::job::save_model(&self.settings.job, &mp) {
+                            Ok(_) => {
+                                self.refresh_models();
+                                self.settings.model_project = Some(name);
+                                self.active_kind = ittoot_bridge::job::ModelKind::Design;
+                                self.new_model_name.clear();
+                            }
+                            Err(e) => self.job_msg = e.to_string(),
+                        }
+                    }
+                }
+                Err(e) => self.design_msg = e,
+            }
         }
-    }
-
-    /// Where the tables get their values: the active link, else the start values in the sources.
-    fn pump_link(&mut self) {
-        let active = self.settings.active_link.clone();
-        let conn = active.as_ref().and_then(|id| self.settings.connections.iter().find(|c| &c.id == id)).cloned();
-        match conn {
-            Some(c) if c.protocol == Protocol::OpcUa => {
-                if self.poller.is_none() {
-                    let pw = self.secrets.get(&c.id).unwrap_or("").to_string();
-                    self.poller = Some(Poller::spawn(work::opcua_config(&c, &pw, &self.pki)));
-                    self.link_state = LinkState::Connecting;
-                }
-                if let Some(p) = &self.poller {
-                    while let Ok(m) = p.rx.try_recv() {
-                        match m {
-                            PollMsg::State(s) => self.link_state = s,
-                            PollMsg::Values(v) => self.live = v,
-                        }
-                    }
-                    // the table on show, and always the signals the model's joints follow
-                    let mut keys: Vec<String> = self.tables.get(self.active_table).map(|t| t.rows.iter().map(|r| r.key.clone()).collect()).unwrap_or_default();
-                    for b in &self.bindings {
-                        if !keys.contains(&b.key) {
-                            keys.push(b.key.clone());
-                        }
-                    }
-                    p.want(keys);
-                }
+        if !self.model_applied && !self.settings.job.number.trim().is_empty() {
+            self.model_applied = true;
+            self.refresh_models();
+            let keep_dir = self.settings.design_model_dir.clone();
+            let n = self.settings.model_project.clone();
+            self.apply_model_project(n);
+            if self.active_kind == ittoot_bridge::job::ModelKind::Template && !keep_dir.is_empty() && self.settings.model_project.is_none() {
+                self.settings.design_model_dir = keep_dir;
             }
-            _ => {
-                self.poller = None;
-                self.live = self.start_values.clone();
-                // the simulated machine: the sliders on the Model page stand in for the axes
-                for b in &self.bindings {
-                    if let Some(v) = self.pose.get(&b.joint) {
-                        self.live.insert(b.key.clone(), ittoot_bridge::driver::Value::Real(*v));
-                    }
-                }
-                self.link_state = if conn.is_some() { LinkState::Failed("No driver for this protocol".into()) } else { LinkState::Connected };
-            }
+        }
+        self.step_demo();
+        self.pump_link();
+        self.update_devices();
+        self.update_slots();
+        self.pump_solid();
+        if self.build_job.is_some() || self.auto_job.is_some() || self.intake_job.is_some() || !self.test_jobs.is_empty() || self.db.list_job.is_some() || self.db.page_job.is_some() || !self.pollers.is_empty() || !self.runs.is_empty() || self.demo_on || self.design_job.is_some() || self.io.job.is_some() || matches!(self.page, Page::Design) || self.design.chat_job.is_some() || self.design.design_job.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(if self.demo_on { 50 } else { 150 }));
         }
     }
 
@@ -431,7 +509,35 @@ impl App {
             }
         }
         let stations = station_points(&self.records);
-        self.plan = model::plan(&self.inference, &stations, &self.roles);
+        // the design agent's finished model, when one was chosen and has been read
+        if self.design_model.is_none() && !self.settings.design_model_dir.trim().is_empty() && self.design_job.is_none() {
+            let dir = PathBuf::from(self.settings.design_model_dir.trim());
+            if let Some(m) = load_design_dir(&dir) {
+                self.design_model = Some(m);
+                self.design_stamp += 1;
+            } else {
+                self.design_msg = format!("Could not read a design in {}", dir.display());
+                self.settings.design_model_dir.clear();
+            }
+        }
+        let build_key = format!("{:?}|{}|{}|{}|{}|{:?}", self.active_kind, self.records.len(), self.all_keys.len(), self.design_stamp, self.roles.len(), self.inference.get("axis0.length").map(|v| v.value));
+        if self.plan.is_none() || build_key != self.plan_build_key {
+            self.plan_build_key = build_key;
+            let _ = &stations;
+            match self.plan_for(self.active_kind, self.design_model.as_ref()) {
+                Ok(p) => {
+                    self.plan = Some(p);
+                    if self.design_msg.starts_with("the data gives") || self.design_msg.starts_with("The design could not") {
+                        self.design_msg.clear();
+                    }
+                }
+                Err(e) => {
+                    self.design_msg = e;
+                    // a design that cannot be used falls back to the plain model
+                    self.plan = self.plan_for(ittoot_bridge::job::ModelKind::Template, None).ok();
+                }
+            }
+        }
         let key = format!("{:?}", self.plan.as_ref().map(|p| &p.joints));
         if key != self.plan_key {
             self.plan_key = key;
@@ -446,15 +552,105 @@ impl App {
         };
     }
 
+    /// Ask the design agent for the rail and baths of this machine: one bath per PLC station.
+    pub fn start_design_model(&mut self, model: &str) {
+        let stations = station_points(&self.records);
+        let Some(out) = self.settings.job.design_dir(model) else {
+            self.job_msg = "Give the job a number first: the design is saved in the job's folder.".into();
+            return;
+        };
+        if stations.is_empty() {
+            self.design_msg = "No stations in the data to build baths from.".into();
+            return;
+        }
+        self.pending_model = model.to_string();
+        let title = self.settings.job.title();
+        let application = self.settings.job.application().to_string();
+        let project = ittoot_bridge::job::safe(model);
+        let url = if self.settings.design_agent.trim().is_empty() { designwork::DEFAULT_URL.to_string() } else { self.settings.design_agent.trim().to_string() };
+        let mut sorted = stations.clone();
+        sorted.sort_by(|a, b| a.x.total_cmp(&b.x));
+        let n = sorted.len();
+        let list: Vec<serde_json::Value> = sorted
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                let role = if i == 0 { "load" } else if i + 1 == n { "unload" } else if i % 2 == 1 { "process" } else { "rinse" };
+                let chem = if role == "process" { "acid" } else if role == "rinse" { "water" } else { "none" };
+                serde_json::json!({"id": format!("T{}", i + 1), "label": s.name, "role": role, "chemistry": chem})
+            })
+            .collect();
+        let spec = serde_json::json!({"name": title, "application": application, "stations": list, "transporters": [{"id": "A", "serves": "all"}]});
+        let output_dir = out.display().to_string();
+        self.design_msg = "asking the design agent...".into();
+        self.design_job = Some(Job::spawn(move || {
+            let r = designwork::post(&url, "/api/design", &serde_json::json!({"project": project, "spec": spec, "output_dir": output_dir}), false)?;
+            let folder = r["folder"].as_str().ok_or("the agent gave no folder")?.to_string();
+            load_design_dir(std::path::Path::new(&folder)).map(|(d, s)| (d, s, folder)).ok_or_else(|| "the design files could not be read".to_string())
+        }));
+    }
+
+    /// The demo cycle moves the simulated pose while no PLC is connected.
+    fn step_demo(&mut self) {
+        let dt = self.demo_at.elapsed().as_secs_f64().min(0.25);
+        self.demo_at = std::time::Instant::now();
+        // the demo runs with no link, or when the PLC link is not up (so the picture can still be shown)
+        let simulated = self.settings.active_link.is_none() || matches!(self.link_state, LinkState::Failed(_));
+        if !(self.demo_on && simulated) {
+            self.demo = None;
+            return;
+        }
+        if self.demo.is_none() {
+            let stations = station_points(&self.records);
+            self.demo = self.plan.as_ref().and_then(|p| ittoot_bridge::demo::Demo::new(p, &stations));
+        }
+        if let (Some(d), Some(p)) = (self.demo.as_mut(), self.plan.as_ref()) {
+            while self.demo_skip > 0.0 {
+                d.step(0.05);
+                self.demo_skip -= 0.05;
+            }
+            d.step(dt);
+            self.pose = d.pose(p);
+        }
+    }
+
+    /// What each motor, sensor and peripheral shows now, and the colours pushed to Solidcraft when one changes.
+    fn update_devices(&mut self) {
+        use ittoot_bridge::devices::{colour_commands, shades, Motion};
+        let Some(plan) = self.plan.clone() else { return };
+        let position = multi::positions(&plan, &self.bindings, &self.live);
+        if let (Some(d), true) = (&self.demo, self.demo_on) {
+            self.speeds = d.speed.iter().enumerate().map(|(a, s)| (a as i64, *s)).collect();
+        } else {
+            multi::track_speeds(&mut self.track, &mut self.moved_at, &mut self.speeds, &position);
+        }
+        self.shades = shades(&plan, &Motion { position: &position, speed: &self.speeds, live: &self.live, keys: &self.all_keys });
+        let key: String = self.shades.iter().map(|s| format!("{:?}", s.rgb)).collect();
+        if key != self.colour_sent {
+            self.colour_sent = key;
+            let cmds = colour_commands(&plan, &self.shades);
+            for (id, r) in &self.runs {
+                if self.slots.contains_key(id) {
+                    continue;
+                }
+                if let (Some(link), true) = (&r.link, r.push_live) {
+                    link.send(work::PushMsg::Colour(cmds.clone()));
+                }
+            }
+        }
+    }
+
     /// Keep Solidcraft's joints at the machine's positions.
     fn pump_solid(&mut self) {
         let due = self.last_push.elapsed() >= std::time::Duration::from_millis(200);
         let cmds = match &self.plan {
+            Some(_) if due && self.active_kind == ittoot_bridge::job::ModelKind::Scratch => model::free_drive_commands(&self.scratch, &self.live),
             Some(p) if due => model::drive_commands(p, &self.bindings, &self.live),
             _ => Vec::new(),
         };
         let ids: Vec<String> = self.runs.keys().cloned().collect();
         for id in ids {
+            let cmds_here = if due { self.drive_for(&id, &cmds) } else { Vec::new() };
             // a Solidcraft this bridge started: once its control port answers, connect to it
             let ready = self.runs.get(&id).and_then(|r| r.wait.as_ref()).and_then(Job::poll);
             if let Some(up) = ready {
@@ -485,8 +681,8 @@ impl App {
                 while let Ok(m) = s.rx.try_recv() {
                     r.status = m;
                 }
-                if r.push_live && !cmds.is_empty() {
-                    s.send(work::PushMsg::Drive(cmds.clone()));
+                if r.push_live && !cmds_here.is_empty() {
+                    s.send(work::PushMsg::Drive(cmds_here));
                 }
             }
         }
@@ -546,7 +742,7 @@ impl App {
             return;
         }
         shot.frames += 1;
-        if shot.frames == 8 && !shot.requested {
+        if shot.frames >= 8 && !shot.requested && self.started.elapsed().as_secs_f64() >= self.shot_delay {
             shot.requested = true;
             let slot = shot.result.clone();
             ctx.request_screenshot(move |img| {
@@ -593,7 +789,7 @@ fn main() -> eframe::Result {
     let shot_path = arg(&args, "--shot");
     let demo = arg(&args, "--demo");
     let page = arg(&args, "--page");
-    let mut app = App::new(shot_path.is_none() && demo.is_none() && !args.iter().any(|a| a == "--save-deployment"));
+    let mut app = App::new((shot_path.is_none() && demo.is_none() && !args.iter().any(|a| a == "--save-deployment")) || args.iter().any(|a| a == "--load-settings"));
     if let Some(p) = &demo {
         app.demo(p);
     }
@@ -617,10 +813,34 @@ fn main() -> eframe::Result {
     if let Some(n) = arg(&args, "--conn").and_then(|n| n.parse::<usize>().ok()) {
         app.sel_conn = n;
     }
+    if let Some(j) = arg(&args, "--job") {
+        app.settings.job.number = j;
+    }
+    if let Some(r) = arg(&args, "--job-root") {
+        app.settings.job.root = r;
+    }
+    if let Some(spec) = arg(&args, "--new-model") {
+        // kind:name, for tests and scripts (the same as the Model page buttons)
+        let (kind, name) = spec.split_once(':').unwrap_or((spec.as_str(), ""));
+        app.new_model_name = name.to_string();
+        app.refresh_models();
+        match kind {
+            "template" => app.new_model(ittoot_bridge::job::ModelKind::Template),
+            "scratch" => app.new_model(ittoot_bridge::job::ModelKind::Scratch),
+            _ => app.new_model(ittoot_bridge::job::ModelKind::Design),
+        }
+        app.model_applied = true;
+    }
+    if let Some(d) = arg(&args, "--design-model") {
+        app.settings.design_model_dir = d;
+    }
     if let Some(t) = arg(&args, "--table") {
         app.pending_table = Some(t);
     }
     app.autorun = u8::from(args.iter().any(|a| a == "--go"));
+    app.demo_on = args.iter().any(|a| a == "--cycle");
+    app.shot_delay = arg(&args, "--shot-delay").and_then(|s| s.parse().ok()).unwrap_or(0.0);
+    app.demo_skip = arg(&args, "--cycle-at").and_then(|s| s.parse().ok()).unwrap_or(0.0);
     app.save_deployment_and_quit = args.iter().any(|a| a == "--save-deployment");
     if let Some(p) = shot_path {
         app.shot = Some(Shot { path: PathBuf::from(p), frames: 0, requested: false, result: Default::default() });

@@ -22,13 +22,17 @@ pub struct ModelTarget {
     pub cpu_render: bool,
     #[serde(default)]
     pub notes: String,
+    /// The model project (in the job's Models folder) this Solidcraft shows; empty: the one the Model page works on.
+    /// Several Solidcrafts may show different models of the same PLC.
+    #[serde(default)]
+    pub model_project: String,
 }
 
 pub const DEFAULT_PORT: u16 = 38400;
 
 impl ModelTarget {
     pub fn new(id: impl Into<String>, name: impl Into<String>, port: u16) -> Self {
-        ModelTarget { id: id.into(), name: name.into(), host: "127.0.0.1".into(), port, exe: String::new(), design: String::new(), cpu_render: false, notes: String::new() }
+        ModelTarget { id: id.into(), name: name.into(), host: "127.0.0.1".into(), port, exe: String::new(), design: String::new(), cpu_render: false, notes: String::new(), model_project: String::new() }
     }
 
     /// True when this PC can start it: the address is this PC.

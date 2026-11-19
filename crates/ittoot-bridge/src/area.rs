@@ -56,6 +56,9 @@ pub struct DataArea {
     pub origin: Origin,
     #[serde(default)]
     pub notes: String,
+    /// The PLC project (path) the area was found in, so several PLCs running one model keep their data apart.
+    #[serde(default)]
+    pub project: String,
 }
 
 fn yes() -> bool {
@@ -66,7 +69,7 @@ impl DataArea {
     pub fn new(id: impl Into<String>, role: AreaRole, kind: AreaKind, source: impl Into<String>) -> Self {
         let source = source.into();
         let label = label_of(&source);
-        DataArea { id: id.into(), role, kind, label, source, connection: None, enabled: true, origin: Origin::User, notes: String::new() }
+        DataArea { id: id.into(), role, kind, label, source, connection: None, enabled: true, origin: Origin::User, notes: String::new(), project: String::new() }
     }
 }
 

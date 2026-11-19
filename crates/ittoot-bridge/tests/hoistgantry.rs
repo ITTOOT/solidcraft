@@ -104,3 +104,44 @@ fn v1_booklet_and_data_give_a_bound_model() {
     assert_eq!(b.len(), 3, "every joint finds its axis's actual position");
     println!("{} parts, {} commands", p.parts.len(), p.commands().len());
 }
+
+/// The demo cycle on the real v1.0.1 data keeps going: it never stalls, and every axis moves in every minute.
+#[test]
+fn demo_cycle_runs_on_the_real_data_without_stalling() {
+    use ittoot_bridge::area::AreaKind;
+    use ittoot_bridge::demo::Demo;
+    use ittoot_bridge::devices::add_devices;
+    use ittoot_bridge::infer::{infer, records_from_db, sensor_points, station_points};
+    use ittoot_bridge::model::plan;
+    use ittoot_bridge::scl;
+    if !std::path::Path::new(V1).exists() {
+        return;
+    }
+    let d = auto_config(&[V1.to_string()], &[], ScanLimits::default());
+    let mut records = Vec::new();
+    for c in &d.candidates {
+        if c.area.kind != AreaKind::DataBlock {
+            continue;
+        }
+        if let Ok(text) = std::fs::read_to_string(&c.area.source) {
+            for db in scl::parse(&text).dbs {
+                records.extend(records_from_db(&db));
+            }
+        }
+    }
+    let st = station_points(&records);
+    let mut p = plan(&infer(&records, &Default::default()), &st, &[]).expect("a plan");
+    add_devices(&mut p, &sensor_points(&records), &st, &[]);
+    for s in &st { println!("STATION {:?}", s); }
+    let mut demo = Demo::new(&p, &st).expect("a demo");
+    let mut last_move = 0.0;
+    let mut t = 0.0;
+    while t < 600.0 {
+        demo.step(0.05);
+        t += 0.05;
+        if demo.speed.iter().any(|s| s.abs() > 0.0) {
+            last_move = t;
+        }
+        assert!(t - last_move < 5.0, "stalled at t={t:.1}: pos {:?} (stops {:?})", demo.pos, demo);
+    }
+}

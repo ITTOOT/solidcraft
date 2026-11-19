@@ -35,13 +35,29 @@ pub struct BridgeSettings {
     /// The model the Model page works on.
     #[serde(default)]
     pub active_model: Option<String>,
+    /// Address of the design agent (AI Office); empty means its default.
+    #[serde(default)]
+    pub design_agent: String,
+    /// A design agent project folder (design.json, model-script.json) whose rail and baths the PLC's transport runs on; empty: the plain template.
+    #[serde(default)]
+    pub design_model_dir: String,
+    /// The job: its number titles every document and model, and names the folder they are saved in.
+    #[serde(default)]
+    pub job: crate::job::Job,
+    /// The model project (by name, in the job's Models folder) the Model page works on.
+    #[serde(default)]
+    pub model_project: Option<String>,
+    /// For each PLC project (path) the connection it is read through. The first project is the primary PLC, read through
+    /// `active_link`; the others are read through these, so several PLCs can run one model.
+    #[serde(default)]
+    pub project_links: std::collections::BTreeMap<String, String>,
 }
 
 pub const CURRENT_VERSION: u32 = 1;
 
 impl Default for BridgeSettings {
     fn default() -> Self {
-        BridgeSettings { version: CURRENT_VERSION, projects: Vec::new(), document_folders: Vec::new(), areas: Vec::new(), connections: Vec::new(), overrides: Default::default(), active_link: None, bindings: Default::default(), models: Vec::new(), active_model: None }
+        BridgeSettings { version: CURRENT_VERSION, projects: Vec::new(), document_folders: Vec::new(), areas: Vec::new(), connections: Vec::new(), overrides: Default::default(), active_link: None, bindings: Default::default(), models: Vec::new(), active_model: None, design_agent: String::new(), design_model_dir: String::new(), job: Default::default(), model_project: None, project_links: Default::default() }
     }
 }
 
@@ -110,14 +126,26 @@ impl BridgeSettings {
 
     /// Merge auto-config results: new areas are added, areas the user made or edited are never touched,
     /// auto areas that are gone from disk are dropped. Returns (added, removed).
+    /// Give each found area the connection of its project. The primary PLC (the first project) keeps plain keys, so a model
+    /// made for one PLC is unchanged; every other project's areas are read through their own connection.
+    pub fn apply_links(&mut self) {
+        let primary = self.projects.first().cloned().unwrap_or_default();
+        let links = self.project_links.clone();
+        let known: Vec<String> = self.connections.iter().map(|c| c.id.clone()).collect();
+        for a in self.areas.iter_mut().filter(|a| a.origin == Origin::Auto && !a.project.is_empty()) {
+            a.connection = if a.project == primary { None } else { links.get(&a.project).filter(|c| known.contains(c)).cloned() };
+        }
+    }
+
     pub fn merge_auto(&mut self, found: Vec<DataArea>) -> (usize, usize) {
         let keep: Vec<DataArea> = self.areas.iter().filter(|a| a.origin == Origin::User).cloned().collect();
         let old_auto: Vec<DataArea> = self.areas.iter().filter(|a| a.origin == Origin::Auto).cloned().collect();
         let mut added = 0;
         let mut next = keep;
         for mut f in found {
-            if next.iter().any(|a| a.source == f.source && a.role == f.role) {
-                continue; // the user already has it
+            // the user already has it; the same program in another PLC project is another PLC's data, so it stays
+            if next.iter().any(|a| a.source == f.source && a.role == f.role && (a.project == f.project || a.project.is_empty())) {
+                continue;
             }
             f.origin = Origin::Auto;
             if !old_auto.iter().any(|a| a.source == f.source) {
@@ -139,6 +167,34 @@ impl BridgeSettings {
         }
         self.areas = next;
         (added, removed)
+    }
+}
+
+#[cfg(test)]
+mod multi_plc_tests {
+    use super::*;
+    use crate::area::{AreaKind, DataArea};
+
+    fn area(id: &str, project: &str) -> DataArea {
+        let mut a = DataArea::new(id, AreaRole::Controls, AreaKind::DataBlock, format!("{project}/{id}.scl"));
+        a.origin = Origin::Auto;
+        a.project = project.into();
+        a
+    }
+
+    #[test]
+    fn the_primary_plc_keeps_plain_keys_and_every_other_is_read_through_its_connection() {
+        let mut s = BridgeSettings { projects: vec!["A".into(), "B".into()], connections: vec![crate::connection::Connection::new("c1", "PLC 1", crate::connection::DeviceKind::Plc, crate::connection::Protocol::OpcUa, "10.0.0.1"), crate::connection::Connection::new("c2", "PLC 2", crate::connection::DeviceKind::Plc, crate::connection::Protocol::OpcUa, "10.0.0.2")], ..Default::default() };
+        s.project_links.insert("A".into(), "c1".into());
+        s.project_links.insert("B".into(), "c2".into());
+        s.areas = vec![area("Live", "A"), area("Live", "B")];
+        s.apply_links();
+        assert_eq!(s.areas[0].connection, None, "the first project is the primary");
+        assert_eq!(s.areas[1].connection.as_deref(), Some("c2"));
+        // a link to a connection that no longer exists is dropped
+        s.connections.pop();
+        s.apply_links();
+        assert_eq!(s.areas[1].connection, None);
     }
 }
 

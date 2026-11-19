@@ -52,17 +52,48 @@ pub struct JointPlan {
     pub b: String,
     pub origin: [f64; 3],
     pub axis: [f64; 3],
+    /// The travel in the PLC's units (what the sliders and the PLC's positions run over).
     pub limits: (f64, f64),
+    /// The travel of the model's joint, when the model is not the PLC's own scale (a design's rail).
+    pub drive_limits: (f64, f64),
+    /// PLC position -> joint position, piecewise linear through these points (empty: the same).
+    pub map: Vec<(f64, f64)>,
+}
+
+impl JointPlan {
+    /// The joint's value for a PLC position.
+    pub fn to_joint(&self, plc: f64) -> f64 {
+        map_through(&self.map, plc).clamp(self.drive_limits.0, self.drive_limits.1)
+    }
+}
+
+/// Piecewise-linear through `pts` (sorted by the first number), continuing at the end slopes; the same when there are none.
+pub fn map_through(pts: &[(f64, f64)], v: f64) -> f64 {
+    match pts {
+        [] => v,
+        [(a, b)] => v - a + b,
+        _ => {
+            let seg = pts.windows(2).find(|w| v <= w[1].0).unwrap_or(&pts[pts.len() - 2..]);
+            let (p, q) = (seg[0], seg[1]);
+            if (q.0 - p.0).abs() < 1e-9 { p.1 } else { p.1 + (v - p.0) * (q.1 - p.1) / (q.0 - p.0) }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ModelPlan {
+    /// Where the model's bounding box starts (X, Y) in mm, for drawing.
+    pub origin: [f64; 3],
+    /// A design's own build script (rail, baths, pipes...), sent instead of the template's commands.
+    pub raw: Option<Vec<Json>>,
     pub parts: Vec<Part>,
     pub joints: Vec<JointPlan>,
     /// What was assumed or left out, for the user to read.
     pub notes: Vec<String>,
     /// Overall size X, Y, Z in mm.
     pub envelope: [f64; 3],
+    /// Motors, sensors and peripherals added by `devices::add_devices`.
+    pub devices: Vec<crate::devices::Device>,
 }
 
 fn role_for(roles: &[(String, Vec<char>)], letter: char) -> Option<&str> {
@@ -105,8 +136,8 @@ pub fn plan(inf: &Inference, stations: &[StationPoint], roles: &[(String, Vec<ch
     ];
     let trolley_bottom = h - BRIDGE_DEPTH - TROLLEY_SIZE[2];
     let mut joints = vec![
-        JointPlan { name: name_of('X', "X", "Axis X"), letter: 'X', axis_index: 0, a: "Rail".into(), b: bridge.clone(), origin: [0.0, 0.0, h], axis: [1.0, 0.0, 0.0], limits: (0.0, lx) },
-        JointPlan { name: name_of('Y', "Y", "Axis Y"), letter: 'Y', axis_index: 1, a: bridge, b: trolley.clone(), origin: [0.0, 0.0, h - BRIDGE_DEPTH], axis: [0.0, 1.0, 0.0], limits: (0.0, ly) },
+        JointPlan { name: name_of('X', "X", "Axis X"), letter: 'X', axis_index: 0, a: "Rail".into(), b: bridge.clone(), origin: [0.0, 0.0, h], axis: [1.0, 0.0, 0.0], limits: (0.0, lx), drive_limits: (0.0, lx), map: Vec::new() },
+        JointPlan { name: name_of('Y', "Y", "Axis Y"), letter: 'Y', axis_index: 1, a: bridge, b: trolley.clone(), origin: [0.0, 0.0, h - BRIDGE_DEPTH], axis: [0.0, 1.0, 0.0], limits: (0.0, ly), drive_limits: (0.0, ly), map: Vec::new() },
     ];
     if let Some(lz) = lz {
         parts.push(Part {
@@ -114,7 +145,7 @@ pub fn plan(inf: &Inference, stations: &[StationPoint], roles: &[(String, Vec<ch
             bodies: vec![Body { name: format!("{hook} body"), corner: [-HOOK_SIZE[0] / 2.0, -HOOK_SIZE[1] / 2.0, trolley_bottom - HOOK_SIZE[2]], size: HOOK_SIZE }],
             grounded: false,
         });
-        joints.push(JointPlan { name: name_of('Z', "Z", "Axis Z"), letter: 'Z', axis_index: 2, a: trolley, b: hook, origin: [0.0, 0.0, trolley_bottom], axis: [0.0, 0.0, -1.0], limits: (0.0, lz) });
+        joints.push(JointPlan { name: name_of('Z', "Z", "Axis Z"), letter: 'Z', axis_index: 2, a: trolley, b: hook, origin: [0.0, 0.0, trolley_bottom], axis: [0.0, 0.0, -1.0], limits: (0.0, lz), drive_limits: (0.0, lz), map: Vec::new() });
     } else {
         notes.push("No Z length could be worked out, so there is no hook.".into());
     }
@@ -129,12 +160,17 @@ pub fn plan(inf: &Inference, stations: &[StationPoint], roles: &[(String, Vec<ch
     if placed > 0 {
         notes.push(format!("{placed} stations placed on the floor from the station table."));
     }
-    Some(ModelPlan { parts, joints, notes, envelope: [lx + 2.0 * GIRDER_OVERRUN, ly + 2.0 * GIRDER_WIDTH, h + GIRDER_DEPTH] })
+    Some(ModelPlan { origin: [-GIRDER_OVERRUN, -GIRDER_WIDTH, 0.0], raw: None, parts, joints, notes, envelope: [lx + 2.0 * GIRDER_OVERRUN, ly + 2.0 * GIRDER_WIDTH, h + GIRDER_DEPTH], devices: Vec::new() })
 }
 
 impl ModelPlan {
     /// The Solidcraft command script that builds the model: bodies, components, grounding, joints.
     pub fn commands(&self) -> Vec<Json> {
+        if let Some(raw) = &self.raw {
+            let mut c = raw.clone();
+            c.extend(crate::devices::colour_commands(self, &[]));
+            return c;
+        }
         let mut c: Vec<Json> = Vec::new();
         for p in &self.parts {
             for b in &p.bodies {
@@ -155,6 +191,8 @@ impl ModelPlan {
                 "a":{"occurrence":j.a,"point":j.origin,"z":j.axis},
                 "b":{"occurrence":j.b,"point":j.origin,"z":j.axis}}}));
         }
+        // the quiet structure colours and each device's own colour; the live shades are sent over these
+        c.extend(crate::devices::colour_commands(self, &[]));
         c
     }
 }
@@ -241,8 +279,21 @@ pub fn drive_commands(plan: &ModelPlan, bindings: &[ModelBinding], values: &Hash
         .filter_map(|b| {
             let j = plan.joints.iter().find(|j| j.name == b.joint)?;
             let raw = number(values.get(&b.key)?)?;
-            let v = (raw * b.scale + b.offset).clamp(j.limits.0, j.limits.1);
+            let v = j.to_joint(raw * b.scale + b.offset);
             Some(json!({"command":"joint.drive","params":{"joint":b.joint,"value":v,"quiet":true}}))
+        })
+        .collect()
+}
+
+/// `joint.drive` for a model made from scratch: each free binding whose signal is present and a number
+/// (Solidcraft clamps to the joint's own limits).
+pub fn free_drive_commands(bindings: &[crate::job::FreeBinding], values: &HashMap<String, Value>) -> Vec<Json> {
+    bindings
+        .iter()
+        .filter(|b| !b.joint.trim().is_empty())
+        .filter_map(|b| {
+            let raw = number(values.get(&b.key)?)?;
+            Some(json!({"command":"joint.drive","params":{"joint":b.joint.trim(),"value":raw * b.scale + b.offset,"quiet":true}}))
         })
         .collect()
 }
@@ -284,8 +335,22 @@ mod tests {
         let cmds = p.commands();
         assert_eq!(cmds.iter().filter(|c| c["command"] == "joint.create").count(), 3);
         assert_eq!(cmds.iter().filter(|c| c["command"] == "solid.box").count(), 2 + 1 + 1 + 1 + 1);
+        assert!(cmds.iter().any(|c| c["command"] == "appearance.assign"), "the structure is coloured");
         // without roles it still plans, with plain names
         assert_eq!(plan(&inf, &st, &[]).unwrap().joints[0].name, "Axis X");
+    }
+
+    #[test]
+    fn a_scratch_model_drives_its_own_joints_by_scale_and_offset() {
+        let b = vec![
+            crate::job::FreeBinding { joint: "Lift".into(), key: "a".into(), scale: 0.5, offset: 10.0 },
+            crate::job::FreeBinding { joint: "".into(), key: "a".into(), scale: 1.0, offset: 0.0 },
+            crate::job::FreeBinding { joint: "Gone".into(), key: "missing".into(), scale: 1.0, offset: 0.0 },
+        ];
+        let vals: HashMap<String, Value> = [("a".to_string(), Value::Real(100.0))].into();
+        let d = free_drive_commands(&b, &vals);
+        assert_eq!(d.len(), 1, "no joint name and no signal give nothing");
+        assert_eq!((d[0]["params"]["joint"].as_str(), d[0]["params"]["value"].as_f64()), (Some("Lift"), Some(60.0)));
     }
 
     #[test]

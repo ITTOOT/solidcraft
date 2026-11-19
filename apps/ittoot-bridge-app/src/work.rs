@@ -34,6 +34,23 @@ impl<T: Send + 'static> Job<T> {
     }
 }
 
+/// Look for the data areas of every PLC project, each on its own, so two PLCs with data blocks of the same name keep both;
+/// every area is marked with the project it was found in.
+pub fn scan_projects(projects: &[String], extra_folders: &[String]) -> ittoot_bridge::discover::Discovery {
+    use ittoot_bridge::discover::{auto_config, Discovery, ScanLimits};
+    let mut all = Discovery::default();
+    for (i, p) in projects.iter().enumerate() {
+        let mut d = auto_config(std::slice::from_ref(p), if i == 0 { extra_folders } else { &[] }, ScanLimits::default());
+        for c in &mut d.candidates {
+            c.area.project = p.clone();
+        }
+        all.candidates.extend(d.candidates);
+        all.projects.extend(d.projects);
+        all.notes.extend(d.notes);
+    }
+    all
+}
+
 pub struct Built {
     pub tables: Vec<Table>,
     pub records: Vec<Record>,
@@ -43,33 +60,40 @@ pub struct Built {
 
 pub fn build(areas: &[DataArea]) -> Built {
     let mut tables = Vec::new();
-    let mut files: Vec<PathBuf> = Vec::new();
+    // each source file with the connection its area is read through (none: the primary PLC)
+    let mut files: Vec<(PathBuf, Option<String>)> = Vec::new();
     for a in areas.iter().filter(|a| a.enabled) {
         tables.extend(tables_for(a));
+        let conn = a.connection.clone().filter(|c| !c.is_empty());
         match a.kind {
-            AreaKind::DataBlock => files.push(PathBuf::from(&a.source)),
-            AreaKind::Folder => files.extend(files_under(Path::new(&a.source))),
+            AreaKind::DataBlock => files.push((PathBuf::from(&a.source), conn)),
+            AreaKind::Folder => files.extend(files_under(Path::new(&a.source)).into_iter().map(|f| (f, conn.clone()))),
             _ => {}
         }
     }
     // Controls first, each group in the order the areas came
     tables.sort_by_key(|t| t.role != ittoot_bridge::area::AreaRole::Controls);
-    let mut seen: HashSet<String> = HashSet::new();
+    let mut seen: HashSet<(Option<String>, String)> = HashSet::new();
+    let mut seen_records: HashSet<String> = HashSet::new();
     let mut records = Vec::new();
     let mut start_values = HashMap::new();
-    for f in files {
+    for (f, conn) in files {
         if !f.extension().is_some_and(|e| e.eq_ignore_ascii_case("scl") || e.eq_ignore_ascii_case("db")) {
             continue;
         }
         let Ok(bytes) = std::fs::read(&f) else { continue };
         for db in scl::parse(&String::from_utf8_lossy(&bytes)).dbs {
-            if !seen.insert(db.name.clone()) {
+            if !seen.insert((conn.clone(), db.name.clone())) {
                 continue;
             }
-            records.extend(records_from_db(&db));
+            // the sizes and stations are read from the first PLC that has the block
+            if seen_records.insert(db.name.clone()) {
+                records.extend(records_from_db(&db));
+            }
             for (path, literal) in &db.initial {
                 if let Some(v) = value_from_literal(literal) {
-                    start_values.insert(format!("{}.{}", db.name, path), v);
+                    let key = format!("{}.{}", db.name, path);
+                    start_values.insert(match &conn { Some(c) => ittoot_bridge::table::scoped(c, &key), None => key }, v);
                 }
             }
         }
@@ -83,6 +107,8 @@ pub enum PushMsg {
     Build(Vec<serde_json::Value>),
     /// Send these `joint.drive` commands (only the newest batch matters).
     Drive(Vec<serde_json::Value>),
+    /// Send these `appearance.assign` commands (the device colours); none is ever dropped.
+    Colour(Vec<serde_json::Value>),
 }
 
 /// A link to a running Solidcraft over its control channel, on a thread of its own.
@@ -125,11 +151,16 @@ impl SolidLink {
                 }
                 Ok(n)
             };
-            while let Ok(mut msg) = jobs.recv() {
-                // a drive batch that is already out of date is dropped for the newest one
-                while let (PushMsg::Drive(_), Ok(next @ PushMsg::Drive(_))) = (&msg, jobs.try_recv()) {
-                    msg = next;
+            while let Ok(first) = jobs.recv() {
+                // everything waiting, in order; a drive batch that is already out of date is dropped for the newest one
+                // (builds and colours are never dropped)
+                let mut waiting = vec![first];
+                while let Ok(next) = jobs.try_recv() {
+                    waiting.push(next);
                 }
+                let last_drive = waiting.iter().rposition(|m| matches!(m, PushMsg::Drive(_)));
+                let todo: Vec<PushMsg> = waiting.into_iter().enumerate().filter(|(i, m)| !matches!(m, PushMsg::Drive(_)) || Some(*i) == last_drive).map(|(_, m)| m).collect();
+                for msg in todo {
                 match msg {
                     PushMsg::Build(cmds) => {
                         let mut n = 0;
@@ -156,6 +187,11 @@ impl SolidLink {
                             Err(e) => format!("build stopped: {e}"),
                         });
                     }
+                    PushMsg::Colour(cmds) => {
+                        if let Err(e) = run(&mut conn, &cmds) {
+                            let _ = say.send(format!("colour failed: {e}"));
+                        }
+                    }
                     PushMsg::Drive(cmds) => {
                         if let Err(e) = run(&mut conn, &cmds) {
                             // a drive is sent five times a second: only a failure is worth a line
@@ -167,6 +203,7 @@ impl SolidLink {
                             let _ = say.send("driving".to_string());
                         }
                     }
+                }
                 }
             }
         });

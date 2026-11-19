@@ -5,13 +5,17 @@
 
 pub mod area;
 pub mod connection;
+pub mod demo;
 pub mod deploy;
+pub mod designmodel;
+pub mod devices;
 pub mod discover;
 pub mod docread;
 pub mod driver;
 pub mod error;
 pub mod infer;
 pub mod intake;
+pub mod job;
 pub mod model;
 pub mod scl;
 pub mod settings;

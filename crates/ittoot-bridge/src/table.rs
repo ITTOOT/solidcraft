@@ -154,7 +154,37 @@ pub fn udts_near(file: &Path) -> HashMap<String, Vec<scl::Member>> {
 }
 
 /// The tables for one area. A folder area gives one table per file inside it.
+/// Between a connection's id and a signal's own key: `plc2::Gantry_01_Live.axes[0]...`.
+pub const SCOPE: &str = "::";
+
+/// The key of a signal read from connection `conn`.
+pub fn scoped(conn: &str, key: &str) -> String {
+    format!("{conn}{SCOPE}{key}")
+}
+
+/// A key split into the connection it belongs to (none: the primary PLC) and the key the PLC knows.
+pub fn split_scope(key: &str) -> (Option<&str>, &str) {
+    match key.split_once(SCOPE) {
+        Some((c, k)) if !c.is_empty() && !c.contains(['.', '[', ' ', '\\', '/']) => (Some(c), k),
+        _ => (None, key),
+    }
+}
+
+/// The tables of an area; the keys of an area read from a named connection are scoped to it, so two PLCs with
+/// data blocks of the same name never share a signal.
 pub fn tables_for(area: &DataArea) -> Vec<Table> {
+    let mut t = tables_inner(area);
+    if let Some(c) = area.connection.as_deref().filter(|c| !c.is_empty()) {
+        for table in &mut t {
+            for r in &mut table.rows {
+                r.key = scoped(c, &r.key);
+            }
+        }
+    }
+    t
+}
+
+fn tables_inner(area: &DataArea) -> Vec<Table> {
     if !area.enabled {
         return Vec::new();
     }
@@ -311,6 +341,31 @@ fn io_table(area: &DataArea, file: &Path) -> Table {
         })
         .collect();
     Table { id: area.id.clone(), title: area.label.clone(), role: area.role, rows, note: None }
+}
+
+#[cfg(test)]
+mod scope_tests {
+    use super::*;
+
+    #[test]
+    fn a_signal_of_another_plc_is_scoped_and_split_back() {
+        let k = scoped("plc2", "Gantry_01_Live.axes[0].drive.status.moving");
+        assert_eq!(k, "plc2::Gantry_01_Live.axes[0].drive.status.moving");
+        assert_eq!(split_scope(&k), (Some("plc2"), "Gantry_01_Live.axes[0].drive.status.moving"));
+        assert_eq!(split_scope("Gantry_01_Live.x"), (None, "Gantry_01_Live.x"));
+        // a path or an address that happens to hold '::' is not a scope
+        assert_eq!(split_scope("C:\\x::y").0, None);
+        assert_eq!(split_scope("::y").0, None);
+    }
+
+    #[test]
+    fn tables_of_a_scoped_area_have_scoped_keys() {
+        let mut a = DataArea::new("io", crate::area::AreaRole::Controls, crate::area::AreaKind::Io, "does-not-exist.csv");
+        a.connection = Some("plc2".into());
+        for t in tables_for(&a) {
+            assert!(t.rows.iter().all(|r| r.key.starts_with("plc2::")));
+        }
+    }
 }
 
 #[cfg(test)]
