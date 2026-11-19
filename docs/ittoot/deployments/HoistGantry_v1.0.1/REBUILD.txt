@@ -1,0 +1,24 @@
+Rebuild this model
+==================
+
+Made by bridge 0.44.0 for Solidcraft 0.44.0.
+
+1. Headless, to a STEP file and a picture:
+
+   solidcraft-cli run "C:\Users\Player_1\AppData\Roaming\ITTOOT\Bridge\deployments\1511-1_HoistGantry_v1.0.1_V18\model-script.json" --out model.step --save model.sc
+   solidcraft-cli snapshot "C:\Users\Player_1\AppData\Roaming\ITTOOT\Bridge\deployments\1511-1_HoistGantry_v1.0.1_V18\model-script.json" --out model.png --view iso
+
+2. Into a running Solidcraft: start it with `--control PORT`, then in the bridge's Model page
+   press Connect and Build the model in Solidcraft. Every command is written to journal.jsonl.
+
+3. Check afterwards: `solidcraft-cli exec joint.list` on the saved design lists these joints:
+   - Gantry X
+   - Gantry Y
+   - Hoist Z
+
+Signals that move them:
+   - Gantry X <- TransportHoist_01_Live.axes[0].control.status.position.actual (found by the rules)
+   - Gantry Y <- TransportHoist_01_Live.axes[1].control.status.position.actual (found by the rules)
+   - Hoist Z <- TransportHoist_01_Live.axes[2].control.status.position.actual (found by the rules)
+
+Commands used: component.create, component.move_bodies, joint.create, joint.drive, occurrence.ground, solid.box.

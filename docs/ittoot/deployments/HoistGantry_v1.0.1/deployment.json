@@ -1,0 +1,805 @@
+{
+  "record_version": 1,
+  "created_unix": 1795082794,
+  "bridge_version": "0.44.0",
+  "solidcraft": {
+    "version": "0.44.0",
+    "commands": [
+      "component.create",
+      "component.move_bodies",
+      "joint.create",
+      "joint.drive",
+      "occurrence.ground",
+      "solid.box"
+    ],
+    "channel": "control channel: engine.execute"
+  },
+  "projects": [
+    "C:\\WORK\\Development\\ITTOOT\\Projects\\Siemens\\V18\\1511-1_HoistGantry_v1.0.1_V18\\1511-1_HoistGantry_v1.0.1_V18.ap18"
+  ],
+  "document_folders": [
+    "C:\\WORK\\Development\\ITTOOT\\Projects\\Siemens\\V18\\1511-1_HoistGantry_v1.0.1_V18"
+  ],
+  "roles_from": "C:\\WORK\\Development\\ITTOOT\\Projects\\Siemens\\V18\\1511-1_HoistGantry_v1.0.1_V18\\Documentation\\HoistGantry_v1.0_Booklet.html",
+  "roles": [
+    [
+      "Gantry",
+      "XY"
+    ],
+    [
+      "Hoist",
+      "Z"
+    ]
+  ],
+  "sizes": [
+    {
+      "key": "axis0.sensor_span",
+      "subject": "Axis 0 (X)",
+      "quantity": "Distance between the outermost limit sensors",
+      "value": 11960.0,
+      "unit": "mm",
+      "confidence": "high",
+      "method": "Highest high-end sensor position minus lowest low-end sensor position.",
+      "evidence": [
+        "Limits_01.rows[0]: LIM_LOW_LOW trips at 20",
+        "Limits_01.rows[3]: LIM_HIGH_HIGH trips at 11980"
+      ],
+      "set_by_user": false
+    },
+    {
+      "key": "axis0.length",
+      "subject": "Axis 0 (X)",
+      "quantity": "Total length",
+      "value": 12000.0,
+      "unit": "mm",
+      "confidence": "medium",
+      "method": "Zero is at the low end (the lowest sensor is 20 from it); the same 20 is assumed beyond the highest sensor. Unit assumed mm.",
+      "evidence": [
+        "Limits_01.rows[0]: LIM_LOW_LOW trips at 20",
+        "Limits_01.rows[3]: LIM_HIGH_HIGH trips at 11980"
+      ],
+      "set_by_user": false
+    },
+    {
+      "key": "axis1.sensor_span",
+      "subject": "Axis 1 (Y)",
+      "quantity": "Distance between the outermost limit sensors",
+      "value": 5960.0,
+      "unit": "mm",
+      "confidence": "high",
+      "method": "Highest high-end sensor position minus lowest low-end sensor position.",
+      "evidence": [
+        "Limits_01.rows[4]: LIM_LOW_LOW trips at 20",
+        "Limits_01.rows[7]: LIM_HIGH_HIGH trips at 5980"
+      ],
+      "set_by_user": false
+    },
+    {
+      "key": "axis1.length",
+      "subject": "Axis 1 (Y)",
+      "quantity": "Total length",
+      "value": 6000.0,
+      "unit": "mm",
+      "confidence": "medium",
+      "method": "Zero is at the low end (the lowest sensor is 20 from it); the same 20 is assumed beyond the highest sensor. Unit assumed mm.",
+      "evidence": [
+        "Limits_01.rows[4]: LIM_LOW_LOW trips at 20",
+        "Limits_01.rows[7]: LIM_HIGH_HIGH trips at 5980"
+      ],
+      "set_by_user": false
+    },
+    {
+      "key": "axis2.sensor_span",
+      "subject": "Axis 2 (Z)",
+      "quantity": "Distance between the outermost limit sensors",
+      "value": 2960.0,
+      "unit": "mm",
+      "confidence": "high",
+      "method": "Highest high-end sensor position minus lowest low-end sensor position.",
+      "evidence": [
+        "Limits_01.rows[8]: LIM_LOW_LOW trips at 20",
+        "Limits_01.rows[11]: LIM_HIGH_HIGH trips at 2980"
+      ],
+      "set_by_user": false
+    },
+    {
+      "key": "axis2.length",
+      "subject": "Axis 2 (Z)",
+      "quantity": "Total length",
+      "value": 3000.0,
+      "unit": "mm",
+      "confidence": "medium",
+      "method": "Zero is at the low end (the lowest sensor is 20 from it); the same 20 is assumed beyond the highest sensor. Unit assumed mm.",
+      "evidence": [
+        "Limits_01.rows[8]: LIM_LOW_LOW trips at 20",
+        "Limits_01.rows[11]: LIM_HIGH_HIGH trips at 2980"
+      ],
+      "set_by_user": false
+    },
+    {
+      "key": "stations.count",
+      "subject": "Stations",
+      "quantity": "Number of stations",
+      "value": 8.0,
+      "unit": "",
+      "confidence": "high",
+      "method": "Rows in the station table that have a position.",
+      "evidence": [
+        "Stations_01.stations: 8 rows"
+      ],
+      "set_by_user": false
+    },
+    {
+      "key": "stations.pitch",
+      "subject": "Stations",
+      "quantity": "Spacing between stations along X",
+      "value": 1500.0,
+      "unit": "mm",
+      "confidence": "medium",
+      "method": "Middle value of the gaps between neighbouring station positions.",
+      "evidence": [
+        "Stations_01.stations: x from 500 to 11500"
+      ],
+      "set_by_user": false
+    },
+    {
+      "key": "stations.width",
+      "subject": "Stations",
+      "quantity": "Station width",
+      "value": 300.0,
+      "unit": "mm",
+      "confidence": "medium",
+      "method": "The width field of the station rows.",
+      "evidence": [
+        "Stations_01.stations: width = 300"
+      ],
+      "set_by_user": false
+    },
+    {
+      "key": "stations.hoist_drop",
+      "subject": "Stations",
+      "quantity": "Hoist drop needed (up to deepest down)",
+      "value": 1850.0,
+      "unit": "mm",
+      "confidence": "medium",
+      "method": "Deepest 'down' position minus the highest 'up' position over all stations.",
+      "evidence": [
+        "Stations_01.stations: up 150, down 2000"
+      ],
+      "set_by_user": false
+    }
+  ],
+  "warnings": [],
+  "notes": [
+    "Gantry-and-hoist template. Axis 0 is X (12000 mm), axis 1 is Y (6000 mm), axis 2 is Z down (3000 mm).",
+    "Assumed (nothing in the code or documents says): girder 250x300 mm, bridge 300x200 mm, trolley [400.0, 400.0, 200.0] mm, hook [100.0, 100.0, 300.0] mm.",
+    "8 stations placed on the floor from the station table."
+  ],
+  "parts": [
+    "Rail",
+    "Gantry bridge",
+    "Gantry trolley",
+    "Hoist hook",
+    "Service front",
+    "Station 1",
+    "Station 2",
+    "Station 3",
+    "Station 4",
+    "Station 5",
+    "Station 6",
+    "Service back"
+  ],
+  "joints": [
+    "Gantry X",
+    "Gantry Y",
+    "Hoist Z"
+  ],
+  "bindings": [
+    {
+      "joint": "Gantry X",
+      "signal": "TransportHoist_01_Live.axes[0].control.status.position.actual",
+      "scale": 1.0,
+      "offset": 0.0,
+      "set_by_user": false
+    },
+    {
+      "joint": "Gantry Y",
+      "signal": "TransportHoist_01_Live.axes[1].control.status.position.actual",
+      "scale": 1.0,
+      "offset": 0.0,
+      "set_by_user": false
+    },
+    {
+      "joint": "Hoist Z",
+      "signal": "TransportHoist_01_Live.axes[2].control.status.position.actual",
+      "scale": 1.0,
+      "offset": 0.0,
+      "set_by_user": false
+    }
+  ],
+  "commands": [
+    {
+      "command": "solid.box",
+      "params": {
+        "body_name": "Rail south",
+        "corner": [
+          -400.0,
+          -250.0,
+          3800.0
+        ],
+        "height": 300.0,
+        "length": 12800.0,
+        "operation": "new",
+        "width": 250.0
+      }
+    },
+    {
+      "command": "solid.box",
+      "params": {
+        "body_name": "Rail north",
+        "corner": [
+          -400.0,
+          6000.0,
+          3800.0
+        ],
+        "height": 300.0,
+        "length": 12800.0,
+        "operation": "new",
+        "width": 250.0
+      }
+    },
+    {
+      "command": "solid.box",
+      "params": {
+        "body_name": "Gantry bridge beam",
+        "corner": [
+          -150.0,
+          -250.0,
+          3600.0
+        ],
+        "height": 200.0,
+        "length": 300.0,
+        "operation": "new",
+        "width": 6500.0
+      }
+    },
+    {
+      "command": "solid.box",
+      "params": {
+        "body_name": "Gantry trolley body",
+        "corner": [
+          -200.0,
+          -200.0,
+          3400.0
+        ],
+        "height": 200.0,
+        "length": 400.0,
+        "operation": "new",
+        "width": 400.0
+      }
+    },
+    {
+      "command": "solid.box",
+      "params": {
+        "body_name": "Hoist hook body",
+        "corner": [
+          -50.0,
+          -50.0,
+          3100.0
+        ],
+        "height": 300.0,
+        "length": 100.0,
+        "operation": "new",
+        "width": 100.0
+      }
+    },
+    {
+      "command": "solid.box",
+      "params": {
+        "body_name": "Service front pad",
+        "corner": [
+          350.0,
+          2850.0,
+          0.0
+        ],
+        "height": 100.0,
+        "length": 300.0,
+        "operation": "new",
+        "width": 300.0
+      }
+    },
+    {
+      "command": "solid.box",
+      "params": {
+        "body_name": "Station 1 pad",
+        "corner": [
+          1850.0,
+          2850.0,
+          0.0
+        ],
+        "height": 100.0,
+        "length": 300.0,
+        "operation": "new",
+        "width": 300.0
+      }
+    },
+    {
+      "command": "solid.box",
+      "params": {
+        "body_name": "Station 2 pad",
+        "corner": [
+          3350.0,
+          2850.0,
+          0.0
+        ],
+        "height": 100.0,
+        "length": 300.0,
+        "operation": "new",
+        "width": 300.0
+      }
+    },
+    {
+      "command": "solid.box",
+      "params": {
+        "body_name": "Station 3 pad",
+        "corner": [
+          4850.0,
+          2850.0,
+          0.0
+        ],
+        "height": 100.0,
+        "length": 300.0,
+        "operation": "new",
+        "width": 300.0
+      }
+    },
+    {
+      "command": "solid.box",
+      "params": {
+        "body_name": "Station 4 pad",
+        "corner": [
+          6350.0,
+          2850.0,
+          0.0
+        ],
+        "height": 100.0,
+        "length": 300.0,
+        "operation": "new",
+        "width": 300.0
+      }
+    },
+    {
+      "command": "solid.box",
+      "params": {
+        "body_name": "Station 5 pad",
+        "corner": [
+          7850.0,
+          2850.0,
+          0.0
+        ],
+        "height": 100.0,
+        "length": 300.0,
+        "operation": "new",
+        "width": 300.0
+      }
+    },
+    {
+      "command": "solid.box",
+      "params": {
+        "body_name": "Station 6 pad",
+        "corner": [
+          9350.0,
+          2850.0,
+          0.0
+        ],
+        "height": 100.0,
+        "length": 300.0,
+        "operation": "new",
+        "width": 300.0
+      }
+    },
+    {
+      "command": "solid.box",
+      "params": {
+        "body_name": "Service back pad",
+        "corner": [
+          11350.0,
+          2850.0,
+          0.0
+        ],
+        "height": 100.0,
+        "length": 300.0,
+        "operation": "new",
+        "width": 300.0
+      }
+    },
+    {
+      "command": "component.create",
+      "params": {
+        "activate": false,
+        "name": "Rail",
+        "parent": "root"
+      }
+    },
+    {
+      "command": "component.move_bodies",
+      "params": {
+        "bodies": [
+          "Rail south",
+          "Rail north"
+        ],
+        "component": "Rail"
+      }
+    },
+    {
+      "command": "component.create",
+      "params": {
+        "activate": false,
+        "name": "Gantry bridge",
+        "parent": "root"
+      }
+    },
+    {
+      "command": "component.move_bodies",
+      "params": {
+        "bodies": [
+          "Gantry bridge beam"
+        ],
+        "component": "Gantry bridge"
+      }
+    },
+    {
+      "command": "component.create",
+      "params": {
+        "activate": false,
+        "name": "Gantry trolley",
+        "parent": "root"
+      }
+    },
+    {
+      "command": "component.move_bodies",
+      "params": {
+        "bodies": [
+          "Gantry trolley body"
+        ],
+        "component": "Gantry trolley"
+      }
+    },
+    {
+      "command": "component.create",
+      "params": {
+        "activate": false,
+        "name": "Hoist hook",
+        "parent": "root"
+      }
+    },
+    {
+      "command": "component.move_bodies",
+      "params": {
+        "bodies": [
+          "Hoist hook body"
+        ],
+        "component": "Hoist hook"
+      }
+    },
+    {
+      "command": "component.create",
+      "params": {
+        "activate": false,
+        "name": "Service front",
+        "parent": "root"
+      }
+    },
+    {
+      "command": "component.move_bodies",
+      "params": {
+        "bodies": [
+          "Service front pad"
+        ],
+        "component": "Service front"
+      }
+    },
+    {
+      "command": "component.create",
+      "params": {
+        "activate": false,
+        "name": "Station 1",
+        "parent": "root"
+      }
+    },
+    {
+      "command": "component.move_bodies",
+      "params": {
+        "bodies": [
+          "Station 1 pad"
+        ],
+        "component": "Station 1"
+      }
+    },
+    {
+      "command": "component.create",
+      "params": {
+        "activate": false,
+        "name": "Station 2",
+        "parent": "root"
+      }
+    },
+    {
+      "command": "component.move_bodies",
+      "params": {
+        "bodies": [
+          "Station 2 pad"
+        ],
+        "component": "Station 2"
+      }
+    },
+    {
+      "command": "component.create",
+      "params": {
+        "activate": false,
+        "name": "Station 3",
+        "parent": "root"
+      }
+    },
+    {
+      "command": "component.move_bodies",
+      "params": {
+        "bodies": [
+          "Station 3 pad"
+        ],
+        "component": "Station 3"
+      }
+    },
+    {
+      "command": "component.create",
+      "params": {
+        "activate": false,
+        "name": "Station 4",
+        "parent": "root"
+      }
+    },
+    {
+      "command": "component.move_bodies",
+      "params": {
+        "bodies": [
+          "Station 4 pad"
+        ],
+        "component": "Station 4"
+      }
+    },
+    {
+      "command": "component.create",
+      "params": {
+        "activate": false,
+        "name": "Station 5",
+        "parent": "root"
+      }
+    },
+    {
+      "command": "component.move_bodies",
+      "params": {
+        "bodies": [
+          "Station 5 pad"
+        ],
+        "component": "Station 5"
+      }
+    },
+    {
+      "command": "component.create",
+      "params": {
+        "activate": false,
+        "name": "Station 6",
+        "parent": "root"
+      }
+    },
+    {
+      "command": "component.move_bodies",
+      "params": {
+        "bodies": [
+          "Station 6 pad"
+        ],
+        "component": "Station 6"
+      }
+    },
+    {
+      "command": "component.create",
+      "params": {
+        "activate": false,
+        "name": "Service back",
+        "parent": "root"
+      }
+    },
+    {
+      "command": "component.move_bodies",
+      "params": {
+        "bodies": [
+          "Service back pad"
+        ],
+        "component": "Service back"
+      }
+    },
+    {
+      "command": "occurrence.ground",
+      "params": {
+        "grounded": true,
+        "occurrence": "Rail:1"
+      }
+    },
+    {
+      "command": "occurrence.ground",
+      "params": {
+        "grounded": true,
+        "occurrence": "Service front:1"
+      }
+    },
+    {
+      "command": "occurrence.ground",
+      "params": {
+        "grounded": true,
+        "occurrence": "Station 1:1"
+      }
+    },
+    {
+      "command": "occurrence.ground",
+      "params": {
+        "grounded": true,
+        "occurrence": "Station 2:1"
+      }
+    },
+    {
+      "command": "occurrence.ground",
+      "params": {
+        "grounded": true,
+        "occurrence": "Station 3:1"
+      }
+    },
+    {
+      "command": "occurrence.ground",
+      "params": {
+        "grounded": true,
+        "occurrence": "Station 4:1"
+      }
+    },
+    {
+      "command": "occurrence.ground",
+      "params": {
+        "grounded": true,
+        "occurrence": "Station 5:1"
+      }
+    },
+    {
+      "command": "occurrence.ground",
+      "params": {
+        "grounded": true,
+        "occurrence": "Station 6:1"
+      }
+    },
+    {
+      "command": "occurrence.ground",
+      "params": {
+        "grounded": true,
+        "occurrence": "Service back:1"
+      }
+    },
+    {
+      "command": "joint.create",
+      "params": {
+        "a": {
+          "occurrence": "Rail",
+          "point": [
+            0.0,
+            0.0,
+            3800.0
+          ],
+          "z": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        "b": {
+          "occurrence": "Gantry bridge",
+          "point": [
+            0.0,
+            0.0,
+            3800.0
+          ],
+          "z": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        "flip": true,
+        "limits": [
+          [
+            0.0,
+            12000.0
+          ]
+        ],
+        "name": "Gantry X",
+        "type": "slider"
+      }
+    },
+    {
+      "command": "joint.create",
+      "params": {
+        "a": {
+          "occurrence": "Gantry bridge",
+          "point": [
+            0.0,
+            0.0,
+            3600.0
+          ],
+          "z": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "b": {
+          "occurrence": "Gantry trolley",
+          "point": [
+            0.0,
+            0.0,
+            3600.0
+          ],
+          "z": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "flip": true,
+        "limits": [
+          [
+            0.0,
+            6000.0
+          ]
+        ],
+        "name": "Gantry Y",
+        "type": "slider"
+      }
+    },
+    {
+      "command": "joint.create",
+      "params": {
+        "a": {
+          "occurrence": "Gantry trolley",
+          "point": [
+            0.0,
+            0.0,
+            3400.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            -1.0
+          ]
+        },
+        "b": {
+          "occurrence": "Hoist hook",
+          "point": [
+            0.0,
+            0.0,
+            3400.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            -1.0
+          ]
+        },
+        "flip": true,
+        "limits": [
+          [
+            0.0,
+            3000.0
+          ]
+        ],
+        "name": "Hoist Z",
+        "type": "slider"
+      }
+    }
+  ]
+}

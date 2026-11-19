@@ -1,0 +1,17 @@
+[package]
+name = "ittoot-db"
+description = "SQL sources for the ITTOOT bridge: PostgreSQL, SQL Server and MySQL, listed and tabulated read-only; native only"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ittoot-bridge = { path = "../ittoot-bridge" }
+postgres = "0.19"
+mysql = { version = "28", default-features = false, features = ["minimal-rust"] }
+tiberius = { version = "0.13", default-features = false, features = ["tds73", "rustls", "winauth"] }
+tokio = { version = "1", features = ["rt", "net", "time"] }
+tokio-util = { version = "0.7", features = ["compat"] }

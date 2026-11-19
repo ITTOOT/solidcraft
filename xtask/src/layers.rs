@@ -97,6 +97,14 @@ pub const TABLE: &[(&str, Class)] = &[
     ("viewport-gpu", Class::Shared),
     // the viewport in an egui window: egui-wgpu paint callbacks and install (#12943)
     ("viewport-egui", Class::Shared),
+    // ITTOOT: the OT connection bridge (PLC data areas, auto-config, dynamic tables, connections, document intake); plain data, std + serde only
+    ("ittoot-bridge", Class::Shared),
+    // ITTOOT: the OPC UA link (native only; async-opcua, tokio)
+    ("ittoot-opcua", Class::Shared),
+    // ITTOOT: SQL sources (PostgreSQL, SQL Server, MySQL), read-only; native only
+    ("ittoot-db", Class::Shared),
+    // ITTOOT: the bridge desktop app
+    ("ittoot-bridge-app", Class::Exempt),
     // apps and tooling
     ("solidcraft", Class::Exempt),
     ("cli", Class::Exempt),

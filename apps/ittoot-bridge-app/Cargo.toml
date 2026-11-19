@@ -1,0 +1,23 @@
+[package]
+name = "ittoot-bridge-app"
+description = "ITTOOT Solidcraft connection bridge: settings, connections, dynamic tables, equipment sizes and documents"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ittoot-bridge"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+ittoot-bridge = { path = "../../crates/ittoot-bridge" }
+ittoot-opcua = { path = "../../crates/ittoot-opcua" }
+ittoot-db = { path = "../../crates/ittoot-db" }
+solidcraft-control = { workspace = true }
+serde_json = { workspace = true }
+eframe = { workspace = true, features = ["default_fonts", "wgpu", "x11", "wayland"] }
+egui = { workspace = true }
+image = { workspace = true, features = ["png"] }

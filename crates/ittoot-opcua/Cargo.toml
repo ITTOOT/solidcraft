@@ -1,0 +1,18 @@
+[package]
+name = "ittoot-opcua"
+description = "OPC UA link for the ITTOOT bridge: symbolic reads and writes of S7-1500 data blocks; native only"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ittoot-bridge = { path = "../ittoot-bridge" }
+opcua = { package = "async-opcua", version = "0.19", default-features = false, features = ["client"] }
+tokio = { version = "1", features = ["rt", "time", "net"] }
+
+[dev-dependencies]
+opcua = { package = "async-opcua", version = "0.19", default-features = false, features = ["client", "server"] }
+tokio = { version = "1", features = ["rt-multi-thread", "time", "net", "macros", "sync"] }

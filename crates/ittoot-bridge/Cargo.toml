@@ -1,0 +1,14 @@
+[package]
+name = "ittoot-bridge"
+description = "ITTOOT connection bridge: PLC/SCADA data areas, auto-config from projects, dynamic tables, connections and document intake for the digital-twin model; no UI toolkit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
