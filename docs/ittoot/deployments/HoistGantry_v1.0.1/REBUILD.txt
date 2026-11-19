@@ -5,8 +5,8 @@ Made by bridge 0.44.0 for Solidcraft 0.44.0.
 
 1. Headless, to a STEP file and a picture:
 
-   solidcraft-cli run "C:\Users\Player_1\AppData\Roaming\ITTOOT\Bridge\deployments\1511-1_HoistGantry_v1.0.1_V18\model-script.json" --out model.step --save model.sc
-   solidcraft-cli snapshot "C:\Users\Player_1\AppData\Roaming\ITTOOT\Bridge\deployments\1511-1_HoistGantry_v1.0.1_V18\model-script.json" --out model.png --view iso
+   solidcraft-cli run "%APPDATA%\ITTOOT\Bridge\deployments\1511-1_HoistGantry_v1.0.1_V18\model-script.json" --out model.step --save model.sc
+   solidcraft-cli snapshot "%APPDATA%\ITTOOT\Bridge\deployments\1511-1_HoistGantry_v1.0.1_V18\model-script.json" --out model.png --view iso
 
 2. Into a running Solidcraft: start it with `--control PORT`, then in the bridge's Model page
    press Connect and Build the model in Solidcraft. Every command is written to journal.jsonl.
