@@ -1,0 +1,15 @@
+[package]
+name = "ittoot-io"
+description = "IO builder for the ITTOOT bridge: reads IO tables and circuit diagrams (scanned or text), cross-checks them, names the signals and writes IO lists for PLC makers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+lopdf = { version = "0.34", default-features = false, features = ["nom_parser"] }
+fax = "0.2"

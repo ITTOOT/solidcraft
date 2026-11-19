@@ -119,6 +119,7 @@ impl App {
             Page::Model => self.page_model(ui),
             Page::Databases => self.page_databases(ui),
             Page::Documents => self.page_documents(ui),
+            Page::IoBuilder => self.page_io(ui),
         });
     }
 

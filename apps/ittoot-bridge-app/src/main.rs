@@ -3,9 +3,13 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+mod iopage;
+mod iowork;
 mod pages;
 mod theme;
 mod widgets;
+#[cfg(windows)]
+mod winocr;
 mod work;
 
 use ittoot_bridge::area::AreaRole;
@@ -31,10 +35,11 @@ pub enum Page {
     Model,
     Databases,
     Documents,
+    IoBuilder,
 }
 
 impl Page {
-    const ALL: [(Page, &'static str, &'static str); 7] = [
+    const ALL: [(Page, &'static str, &'static str); 8] = [
         (Page::Settings, "Settings", "settings"),
         (Page::Connections, "Connections", "connections"),
         (Page::Tables, "Tables", "tables"),
@@ -42,6 +47,7 @@ impl Page {
         (Page::Model, "Model", "model"),
         (Page::Databases, "Databases", "databases"),
         (Page::Documents, "Documents", "documents"),
+        (Page::IoBuilder, "IO Builder", "io"),
     ];
 }
 
@@ -106,6 +112,7 @@ pub struct App {
     pub pose: HashMap<String, f64>,
     /// One entry per model target, by id: its Solidcraft process, link and status.
     pub runs: HashMap<String, ModelRun>,
+    pub io: iopage::IoState,
     /// The model list as last written, to save only when it changes.
     pub models_saved: String,
     /// `--go`: press Start, then Build, then follow the machine, as a person would (0 off, 1 start, 2 build, 3 done).
@@ -179,6 +186,7 @@ impl App {
             plan_key: String::new(),
             pose: HashMap::new(),
             runs: HashMap::new(),
+            io: iopage::IoState::default(),
             models_saved: String::new(),
             autorun: 0,
             last_push: std::time::Instant::now(),
@@ -357,7 +365,7 @@ impl App {
         }
         self.pump_link();
         self.pump_solid();
-        if self.build_job.is_some() || self.auto_job.is_some() || self.intake_job.is_some() || !self.test_jobs.is_empty() || self.db.list_job.is_some() || self.db.page_job.is_some() || self.poller.is_some() || !self.runs.is_empty() {
+        if self.build_job.is_some() || self.auto_job.is_some() || self.intake_job.is_some() || !self.test_jobs.is_empty() || self.db.list_job.is_some() || self.db.page_job.is_some() || self.poller.is_some() || !self.runs.is_empty() || self.io.job.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(150));
         }
     }
@@ -566,6 +574,22 @@ fn arg(args: &[String], name: &str) -> Option<String> {
 
 fn main() -> eframe::Result {
     let args: Vec<String> = std::env::args().collect();
+    if let Some(f) = arg(&args, "--io-export") {
+        iowork::cli_export(&f, &arg(&args, "--out").unwrap_or_else(|| "io_out".into()));
+        return Ok(());
+    }
+    if args.iter().any(|a| a == "--io-build") {
+        iowork::cli_build(&args);
+        return Ok(());
+    }
+    if let Some(pdf) = arg(&args, "--io-read") {
+        iowork::cli(&pdf, arg(&args, "--pages"));
+        return Ok(());
+    }
+    if let Some(pdf) = arg(&args, "--io-grid") {
+        iowork::grid_debug(&pdf, arg(&args, "--page-no").and_then(|p| p.parse().ok()).unwrap_or(1));
+        return Ok(());
+    }
     let shot_path = arg(&args, "--shot");
     let demo = arg(&args, "--demo");
     let page = arg(&args, "--page");
@@ -580,6 +604,15 @@ fn main() -> eframe::Result {
         && let Some((p, _, _)) = Page::ALL.iter().find(|(_, _, key)| *key == name)
     {
         app.page = *p;
+    }
+    if let Some(f) = arg(&args, "--io-load") {
+        if let Ok(points) = std::fs::read_to_string(&f).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str::<Vec<ittoot_io::IoPoint>>(&t).map_err(|e| e.to_string())) {
+            app.io.summary = format!("{} channels loaded from {f}", points.len());
+            app.io.points = points;
+            app.io_rename();
+        }
+        app.io.table_pdf = arg(&args, "--io-table").unwrap_or_default();
+        app.io.drawing_pdf = arg(&args, "--io-drawing").unwrap_or_default();
     }
     if let Some(n) = arg(&args, "--conn").and_then(|n| n.parse::<usize>().ok()) {
         app.sel_conn = n;

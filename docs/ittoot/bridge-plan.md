@@ -80,3 +80,24 @@ Not verified: the live link to a running Solidcraft window (Connect / Build / pu
 - **Two Solidcraft windows at once** (ports 38400 and 38401, started from the "+" model): both built, both followed the PLC, separate journals.
 - PostgreSQL error text was the client's bare "db error"; it now shows the server's own words. The driver reached a real PostgreSQL 18 but no login was available, so no table was read; SQL Server on this PC has TCP switched off; no MySQL here.
 - Not verifiable here: a Solidcraft on another PC (its control channel listens on 127.0.0.1 only, so it needs a tunnel), live reads from SQL Server / MySQL / a PostgreSQL login.
+
+## Update 2026-11-19 (IO Builder)
+
+New page **IO Builder** and crate `ittoot-io` (core, no OS calls) beside the bridge. It reads an IO table PDF and a circuit-diagram PDF, checks one against the other, names the signals and writes an IO list.
+
+- **Reading** (`ittoot-io::{pdf, bitmap, grid, table, sheet}`): scanned PDFs (CCITT Group 4 pages) are decoded in Rust; table rules are found at a small range of slopes (scans are skewed); every table cell is cut out, enlarged and read on its own through Windows' own OCR (`apps/.../winocr.rs`, offline). Each cell is read three ways and the reading most agree on is kept; module addresses OCR could not read are worked out from neighbours; analog modules and "standalone" tables (terminals listed 1, 5, 2, 6) are handled. Circuit sheets are read in overlapping tiles; addresses (`I20.2`, read as `120.2`) are resolved against the modules the table knows and the device tags in the same column are collected.
+- **Cross-check** (`xref`): table vs drawing (confirmed / differs / table only / drawing only), repeated stations compared (A against B), duplicate descriptions, wrong area letter (`-B` in a table for `-A`), gaps in the module sequence.
+- **Naming** (`naming`): case (snake, camel, Pascal, UPPER_SNAKE, kebab), prefix (none, i/q, ix/qx, di/do/ai/ao, x, custom), two postfixes (number whole list / per station / per module, area letter, address, custom). Default is the house style `i_estopPanel_01`. Names you type are kept.
+- **Export** (`export`): Siemens TIA tag table XML (same layout as the project's own generated `IO_Tags.xml`), Siemens tag CSV, Rockwell Studio 5000 alias CSV, IEC 61131-3 located variables (CODESYS, TwinCAT ...), Mitsubishi GX Works comments, Omron symbol list, generic CSV. Only the Siemens XML follows a layout checked against a file TIA imports; the others are written to the makers' documented layouts and say what they assumed (Rockwell slots, Mitsubishi device numbers, Omron words) in notes before use. None was imported into the maker's software here.
+- **Corrections**: edits to a description are kept as a list (Save / Load and apply) so a new reading does not lose them.
+- **Command line**: `ittoot-bridge --io-build --table T.pdf --drawing D.pdf [--pages 51-83] [--deep] [--edits e.json] [--json points.json] [--out list.csv]`, `--io-read T.pdf`, `--io-export points.json --out folder`, `--io-load points.json --page io`.
+
+Tested on the Amfin plating line (PAL, `amfin60`): IO table 10 pages, circuit diagram 83 pages, a full read takes about 5 minutes. Measured against a by-eye reading of the four station tables (178 channels): OCR alone 47 exact and 30 within 20%, 24 missing, 77 wrong, so the draft needs review; with the by-eye corrections applied the list is complete for those four stations. Findings in the documents: the IO table has tables only for Transporter A, B and stages T8-T12 and T13-T16, while the network overview (page 9) and the circuit diagram show stages T1-T7, T17-T24, T25-T27 and the central rack (I0.x ... I2.x, Q0.x ...) with no table; 94 addresses are on the diagram only.
+
+## Update 2026-11-19 (HMI + PLC + twin together)
+
+Run on HoistGantry v1.0.1: PLCSIM Advanced instance, PLC downloaded from the TIA window, bridge with Solidcraft twin (OPC UA), and the WinCC Runtime Advanced simulation of the project's TP1200 panel, all at once.
+
+- The HMI runtime stayed at `###` until the PG/PC interface (S7ONLINE, used by the runtime simulation) was pointed at `Siemens PLCSIM Virtual Ethernet Adapter.TCPIP.1` instead of `PLCSIM.TCPIP.1`; it was put back afterwards. The HMI project address (192.168.0.10) was left alone and still worked.
+- Result: pressing RESET on each axis, typing target 3000 mm on Axis X and START on the HMI: the PLC's own axis moved to 3000 (read over OPC UA) and the Solidcraft joint Gantry X followed to 3000.0 mm. Picture: `docs/ittoot/screens/hmi-plc-twin.png`.
+- Notes: the axes had faulted (limit sensor) from earlier test jogging past their ends; RESET cleared them. The HMI shows the "too many PowerTags (2048)" box at start (click Noted).

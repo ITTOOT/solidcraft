@@ -103,6 +103,7 @@ pub const TABLE: &[(&str, Class)] = &[
     ("ittoot-opcua", Class::Shared),
     // ITTOOT: SQL sources (PostgreSQL, SQL Server, MySQL), read-only; native only
     ("ittoot-db", Class::Shared),
+    ("ittoot-io", Class::Shared),
     // ITTOOT: the bridge desktop app
     ("ittoot-bridge-app", Class::Exempt),
     // apps and tooling
