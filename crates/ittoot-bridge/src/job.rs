@@ -81,6 +81,13 @@ impl Job {
         if m.is_empty() { None } else { self.models_dir().map(|d| d.join(m)) }
     }
 
+    /// The Solidcraft design file of a model project: `<root>\<job number>\Models\<model>\<title>.sc`, so the design is
+    /// never left "Untitled" and opening it later finds it by the job's title. `None` while there is no job number or no model name.
+    pub fn solid_file(&self, model: &str) -> Option<PathBuf> {
+        let t = safe(&self.title());
+        if t.is_empty() { None } else { self.model_dir(model).map(|d| d.join(format!("{t}.sc"))) }
+    }
+
     pub fn design_dir(&self, model: &str) -> Option<PathBuf> {
         let m = safe(model);
         if m.is_empty() { None } else { self.folder().map(|f| f.join("Design").join(m)) }
@@ -215,6 +222,14 @@ mod tests {
         assert!(f.starts_with(DEFAULT_ROOT), "{}", f.display());
         assert!(f.components().all(|c| c.as_os_str() != ".."), "{}", f.display());
         assert!(!safe("a/b:c*").contains(['/', ':', '*']));
+    }
+
+    #[test]
+    fn the_solidcraft_file_is_titled_and_lives_in_the_models_folder() {
+        let j = Job { number: "J-1".into(), root: r"D:\Jobs".into(), ..Default::default() };
+        let p = j.solid_file("Rail 1").unwrap();
+        assert!(p.ends_with("J-1/Models/Rail 1/Plating Line J-1.sc") || p.ends_with(r"J-1\Models\Rail 1\Plating Line J-1.sc"), "{}", p.display());
+        assert!(Job::default().solid_file("Rail 1").is_none() && j.solid_file("").is_none());
     }
 
     #[test]

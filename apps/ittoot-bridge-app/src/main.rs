@@ -4,6 +4,8 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod designpage;
+mod engpage;
+mod hmipage;
 mod jobpage;
 mod multi;
 mod designwork;
@@ -41,10 +43,13 @@ pub enum Page {
     Documents,
     IoBuilder,
     Design,
+    Engineering,
+    Hmi,
+    Live,
 }
 
 impl Page {
-    const ALL: [(Page, &'static str, &'static str); 9] = [
+    const ALL: [(Page, &'static str, &'static str); 12] = [
         (Page::Settings, "Settings", "settings"),
         (Page::Connections, "Connections", "connections"),
         (Page::Tables, "Tables", "tables"),
@@ -54,6 +59,9 @@ impl Page {
         (Page::Documents, "Documents", "documents"),
         (Page::IoBuilder, "IO Builder", "io"),
         (Page::Design, "Design", "design"),
+        (Page::Engineering, "Engineering", "engineering"),
+        (Page::Hmi, "HMI", "hmi"),
+        (Page::Live, "Live", "live"),
     ];
 }
 
@@ -139,6 +147,10 @@ pub struct App {
     pub last_push: std::time::Instant,
     /// The simulated machine's demo cycle, when switched on and no PLC is connected.
     pub demo_on: bool,
+    pub eng: engpage::EngState,
+    pub hmi: hmipage::HmiState,
+    /// `--compact`: the Model page without the job panel (a small live view beside the model).
+    pub hide_job: bool,
     /// `--shot-delay S`: wait this long (live links need time) before taking the picture.
     pub shot_delay: f64,
     pub started: std::time::Instant,
@@ -247,6 +259,9 @@ impl App {
             autorun: 0,
             last_push: std::time::Instant::now(),
             demo_on: false,
+            eng: Default::default(),
+            hmi: Default::default(),
+            hide_job: false,
             shot_delay: 0.0,
             started: std::time::Instant::now(),
             design_model: None,
@@ -485,7 +500,7 @@ impl App {
         self.update_devices();
         self.update_slots();
         self.pump_solid();
-        if self.build_job.is_some() || self.auto_job.is_some() || self.intake_job.is_some() || !self.test_jobs.is_empty() || self.db.list_job.is_some() || self.db.page_job.is_some() || !self.pollers.is_empty() || !self.runs.is_empty() || self.demo_on || self.design_job.is_some() || self.io.job.is_some() || matches!(self.page, Page::Design) || self.design.chat_job.is_some() || self.design.design_job.is_some() {
+        if self.build_job.is_some() || self.auto_job.is_some() || self.intake_job.is_some() || !self.test_jobs.is_empty() || self.db.list_job.is_some() || self.db.page_job.is_some() || !self.pollers.is_empty() || !self.runs.is_empty() || self.demo_on || self.eng.job.is_some() || self.design_job.is_some() || self.io.job.is_some() || matches!(self.page, Page::Design) || self.design.chat_job.is_some() || self.design.design_job.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(if self.demo_on { 50 } else { 150 }));
         }
     }
@@ -520,11 +535,13 @@ impl App {
                 self.settings.design_model_dir.clear();
             }
         }
-        let build_key = format!("{:?}|{}|{}|{}|{}|{:?}", self.active_kind, self.records.len(), self.all_keys.len(), self.design_stamp, self.roles.len(), self.inference.get("axis0.length").map(|v| v.value));
+        // a design model chosen on the command line or kept in the settings is a design model whatever kind was last picked
+        let kind = if self.design_model.is_some() && self.active_kind == ittoot_bridge::job::ModelKind::Template { ittoot_bridge::job::ModelKind::Design } else { self.active_kind };
+        let build_key = format!("{:?}|{}|{}|{}|{}|{:?}", kind, self.records.len(), self.all_keys.len(), self.design_stamp, self.roles.len(), self.inference.get("axis0.length").map(|v| v.value));
         if self.plan.is_none() || build_key != self.plan_build_key {
             self.plan_build_key = build_key;
             let _ = &stations;
-            match self.plan_for(self.active_kind, self.design_model.as_ref()) {
+            match self.plan_for(kind, self.design_model.as_ref()) {
                 Ok(p) => {
                     self.plan = Some(p);
                     if self.design_msg.starts_with("the data gives") || self.design_msg.starts_with("The design could not") {
@@ -839,6 +856,7 @@ fn main() -> eframe::Result {
     }
     app.autorun = u8::from(args.iter().any(|a| a == "--go"));
     app.demo_on = args.iter().any(|a| a == "--cycle");
+    app.hide_job = args.iter().any(|a| a == "--compact");
     app.shot_delay = arg(&args, "--shot-delay").and_then(|s| s.parse().ok()).unwrap_or(0.0);
     app.demo_skip = arg(&args, "--cycle-at").and_then(|s| s.parse().ok()).unwrap_or(0.0);
     app.save_deployment_and_quit = args.iter().any(|a| a == "--save-deployment");
@@ -846,7 +864,7 @@ fn main() -> eframe::Result {
         app.shot = Some(Shot { path: PathBuf::from(p), frames: 0, requested: false, result: Default::default() });
     }
     let size = arg(&args, "--size").and_then(|s| s.split_once('x').and_then(|(w, h)| Some([w.parse::<f32>().ok()?, h.parse::<f32>().ok()?]))).unwrap_or([1500.0, 920.0]);
-    let options = eframe::NativeOptions { viewport: egui::ViewportBuilder::default().with_inner_size(size).with_min_inner_size([1000.0, 640.0]).with_title("ITTOOT Solidcraft - OT Connection Bridge"), ..Default::default() };
+    let options = eframe::NativeOptions { viewport: egui::ViewportBuilder::default().with_inner_size(size).with_min_inner_size([520.0, 480.0]).with_title("ITTOOT Solidcraft - OT Connection Bridge"), ..Default::default() };
     eframe::run_native(
         "ittoot-bridge",
         options,

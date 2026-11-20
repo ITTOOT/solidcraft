@@ -109,6 +109,8 @@ pub enum PushMsg {
     Drive(Vec<serde_json::Value>),
     /// Send these `appearance.assign` commands (the device colours); none is ever dropped.
     Colour(Vec<serde_json::Value>),
+    /// Save the design under this name once the build before it was accepted (so it is never left Untitled).
+    SaveAs(PathBuf),
 }
 
 /// A link to a running Solidcraft over its control channel, on a thread of its own.
@@ -151,6 +153,7 @@ impl SolidLink {
                 }
                 Ok(n)
             };
+            let mut build_ok = false;
             while let Ok(first) = jobs.recv() {
                 // everything waiting, in order; a drive batch that is already out of date is dropped for the newest one
                 // (builds and colours are never dropped)
@@ -162,6 +165,21 @@ impl SolidLink {
                 let todo: Vec<PushMsg> = waiting.into_iter().enumerate().filter(|(i, m)| !matches!(m, PushMsg::Drive(_)) || Some(*i) == last_drive).map(|(_, m)| m).collect();
                 for msg in todo {
                 match msg {
+                    PushMsg::SaveAs(path) => {
+                        if !build_ok {
+                            continue;
+                        }
+                        if let Some(dir) = path.parent() {
+                            let _ = std::fs::create_dir_all(dir);
+                        }
+                        let c = serde_json::json!({"command": "file.save_as", "params": {"path": path.display().to_string(), "overwrite": true}});
+                        let r = run(&mut conn, std::slice::from_ref(&c));
+                        let _ = ittoot_bridge::deploy::journal(&journal, &c, &match &r { Ok(_) => "ok".to_string(), Err(e) => format!("refused: {e}") });
+                        let _ = say.send(match r {
+                            Ok(_) => format!("saved as {}", path.display()),
+                            Err(e) => format!("save failed: {e}"),
+                        });
+                    }
                     PushMsg::Build(cmds) => {
                         let mut n = 0;
                         let mut failed: Option<String> = None;
@@ -178,6 +196,7 @@ impl SolidLink {
                                 }
                             }
                         }
+                        build_ok = failed.is_none();
                         let r: Result<usize, String> = match failed {
                             Some(e) => Err(e),
                             None => Ok(n),

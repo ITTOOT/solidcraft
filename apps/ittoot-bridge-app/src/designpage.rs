@@ -308,6 +308,9 @@ impl App {
         match self.runs.get(&id).and_then(|r| r.link.as_ref()) {
             Some(link) => {
                 link.send(work::PushMsg::Build(cmds.clone()));
+                if let Some(p) = self.solid_path(&id) {
+                    link.send(work::PushMsg::SaveAs(p));
+                }
                 if let Some(r) = self.runs.get_mut(&id) {
                     r.status = "building the design...".into();
                 }

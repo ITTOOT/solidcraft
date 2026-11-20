@@ -167,7 +167,25 @@ impl ModelPlan {
     /// The Solidcraft command script that builds the model: bodies, components, grounding, joints.
     pub fn commands(&self) -> Vec<Json> {
         if let Some(raw) = &self.raw {
+            // the design's own script, then the bodies of the devices (motors, sensors, peripherals) the design does not draw, each in its component
             let mut c = raw.clone();
+            let own: Vec<String> = raw.iter().filter(|x| x["command"] == "component.create").filter_map(|x| x["params"]["name"].as_str().map(str::to_string)).collect();
+            for p in &self.parts {
+                let bodies: Vec<&Body> = p.bodies.iter().filter(|b| self.devices.iter().any(|d| d.body == b.name)).collect();
+                if bodies.is_empty() {
+                    continue;
+                }
+                for b in &bodies {
+                    c.push(json!({"command":"solid.box","params":{"length":b.size[0],"width":b.size[1],"height":b.size[2],"corner":b.corner,"operation":"new","body_name":b.name}}));
+                }
+                if !own.contains(&p.name) {
+                    c.push(json!({"command":"component.create","params":{"name":p.name,"parent":"root","activate":false}}));
+                }
+                c.push(json!({"command":"component.move_bodies","params":{"bodies":bodies.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(),"component":p.name}}));
+                if !own.contains(&p.name) {
+                    c.push(json!({"command":"occurrence.ground","params":{"occurrence":format!("{}:1", p.name),"grounded":true}}));
+                }
+            }
             c.extend(crate::devices::colour_commands(self, &[]));
             return c;
         }

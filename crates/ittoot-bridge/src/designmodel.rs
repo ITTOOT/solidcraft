@@ -81,9 +81,10 @@ pub fn from_design(base: &ModelPlan, design: &Json, script: Vec<Json>, stations:
                 notes.push(format!("X: the {} PLC stations are the design's {} baths, in order; positions between them are interpolated.", sorted.len(), dx.len()));
             }
             'Y' => {
+                // the stations' row is where the jig hangs over the middle of the bath (the joint's start is the bath's centre line);
+                // PLC positions beyond the row travel the hook's cross range
                 let mid = stations.iter().filter_map(|s| s.y).next().unwrap_or(j.limits.1 / 2.0);
-                let mid_j = (j.drive_limits.0 + j.drive_limits.1) / 2.0;
-                j.map = vec![(j.limits.0, j.drive_limits.0), (mid, mid_j), (j.limits.1, j.drive_limits.1)];
+                j.map = vec![(j.limits.0, j.drive_limits.0), (mid, j.drive_limits.0), (j.limits.1, j.drive_limits.1)];
             }
             'Z' => {
                 let up = stations.iter().filter_map(|s| s.z_up).fold(f64::NAN, f64::min);
@@ -153,7 +154,8 @@ mod tests {
         assert_eq!(x.to_joint(1250.0), 750.0, "between two stations it is interpolated");
         assert_eq!(x.to_joint(-5000.0), 0.0, "and never leaves the joint's travel");
         let y = &p.joints[1];
-        assert_eq!(y.to_joint(3000.0), 200.0, "the stations' row is the middle of the hook's cross travel");
+        assert_eq!(y.to_joint(3000.0), 0.0, "the stations' row hangs the jig over the middle of the bath");
+        assert_eq!(y.to_joint(0.0), 0.0);
         let z = &p.joints[2];
         assert_eq!((z.to_joint(150.0), z.to_joint(2000.0)), (0.0, 800.0));
         assert_eq!(p.parts.iter().find(|q| q.name == "Piping").unwrap().bodies[0].size, [3000.0, 100.0, 100.0], "a cylinder is its bounding box");
@@ -168,6 +170,14 @@ mod tests {
         let d = crate::model::drive_commands(&p, &b, &vals);
         assert_eq!(d[0]["params"]["value"], 1500.0);
         assert_eq!(p.commands()[0]["command"], "solid.box");
+        // the devices a design does not draw are built after its script, each into its component, and coloured
+        let mut with = p.clone();
+        with.parts[0].bodies.push(Body { name: "Motor X".into(), corner: [0.0; 3], size: [10.0; 3] });
+        with.devices.push(crate::devices::Device { name: "Motor X".into(), kind: crate::devices::Kind::Motor, part: with.parts[0].name.clone(), body: "Motor X".into(), axis: Some(0), limit: None, trigger: None, station: None, key: None, fault_key: None });
+        let cmds = with.commands();
+        let n = cmds.len();
+        assert!(cmds.iter().any(|c| c["command"] == "solid.box" && c["params"]["body_name"] == "Motor X") && n > 2);
+        assert!(cmds.iter().any(|c| c["command"] == "component.move_bodies" && c["params"]["bodies"][0] == "Motor X"));
         p.raw = None;
         assert!(map_through(&[], 7.0) == 7.0);
     }

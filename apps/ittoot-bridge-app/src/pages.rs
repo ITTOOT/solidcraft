@@ -70,6 +70,12 @@ enum ModelAct {
 
 impl App {
     pub fn draw(&mut self, root: &mut Ui) {
+        // --compact: only the live page, no title bar and no navigation (a narrow window to film or to leave on a second screen)
+        // (while --go is still starting and building Solidcraft the Model page does that work, so it is shown until then)
+        if self.hide_job && self.autorun != 1 && self.autorun != 2 {
+            egui::CentralPanel::no_frame().frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin::same(12))).show(root, |ui| self.page_live(ui));
+            return;
+        }
         egui::Panel::top("top").frame(egui::Frame::new().fill(BG2).inner_margin(egui::Margin::symmetric(14, 8)).stroke(Stroke::new(1.0, LINE))).show(root, |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("ITTOOT").color(ACCENT).strong().size(18.0));
@@ -121,6 +127,62 @@ impl App {
             Page::Documents => self.page_documents(ui),
             Page::IoBuilder => self.page_io(ui),
             Page::Design => self.page_design(ui),
+            Page::Engineering => self.page_engineering(ui),
+            Page::Hmi => self.page_hmi(ui),
+            Page::Live => self.page_live(ui),
+        });
+    }
+
+    // ---------------------------------------------------------------- Live
+    /// What the machine is doing now, narrow enough to sit beside the model: the axes' positions and every device's colour, state and number.
+    fn page_live(&mut self, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Live").heading());
+            let (t, c) = match &self.link_state {
+                LinkState::Connected => ("PLC connected", OK),
+                LinkState::Connecting => ("connecting", WARN),
+                LinkState::Disconnected => ("off", DIM),
+                LinkState::Failed(_) => ("failed", ERROR),
+            };
+            chip(ui, t, c);
+        });
+        ui.label(RichText::new(self.link_name()).color(DIM).size(12.0));
+        ui.add_space(6.0);
+        if let Some(plan) = self.plan.clone() {
+            panel(ui, |ui| {
+                egui::Grid::new("live-axes").num_columns(2).spacing([18.0, 6.0]).show(ui, |ui| {
+                    let at = crate::multi::positions(&plan, &self.bindings, &self.live);
+                    for j in &plan.joints {
+                        ui.label(RichText::new(&j.name).strong().size(16.0));
+                        let v = at.get(&j.axis_index).map(|v| format!("{v:.0} mm")).unwrap_or_else(|| "-".into());
+                        ui.label(RichText::new(v).color(INFO).size(16.0));
+                        ui.end_row();
+                    }
+                });
+            });
+        }
+        ui.add_space(6.0);
+        // narrow (beside the model): one list; wide (under the model): two lists side by side so it stays short
+        let wide = ui.available_width() > 700.0;
+        let half = if wide { self.shades.len().div_ceil(2) } else { self.shades.len() };
+        panel(ui, |ui| {
+            ui.horizontal_top(|ui| {
+                for (g, chunk) in self.shades.chunks(half.max(1)).enumerate() {
+                    egui::Grid::new(format!("live-devices-{g}")).num_columns(4).spacing([12.0, 5.0]).show(ui, |ui| {
+                        for s in chunk {
+                            let c = Color32::from_rgb(s.rgb[0], s.rgb[1], s.rgb[2]);
+                            let (r, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), Sense::hover());
+                            ui.painter().circle_filled(r.center(), 7.0, c);
+                            ui.painter().circle_stroke(r.center(), 7.0, Stroke::new(1.0, LINE));
+                            ui.label(RichText::new(&s.name).strong().size(14.0));
+                            ui.label(RichText::new(&s.state).color(c).size(14.0));
+                            ui.label(RichText::new(&s.number).color(INFO).size(13.0));
+                            ui.end_row();
+                        }
+                    });
+                    ui.add_space(24.0);
+                }
+            });
         });
     }
 
@@ -629,8 +691,10 @@ impl App {
             ui.label(RichText::new("Model").heading());
             ui.label(RichText::new("The machine as parts and joints, built from the sizes in Equipment. Each joint follows a PLC signal.").color(DIM));
         });
-        self.job_panel(ui);
-        ui.add_space(6.0);
+        if !self.hide_job {
+            self.job_panel(ui);
+            ui.add_space(6.0);
+        }
         let Some(plan) = self.plan.clone() else {
             ui.add_space(20.0);
             ui.label(RichText::new("No model yet: the limit sensors give no X and Y lengths. See Equipment.").color(DIM));
@@ -945,11 +1009,16 @@ impl App {
                 // the record first, so the journal of this build sits beside what it was built from
                 self.export_msg = self.save_deployment(&plan);
                 let script = self.build_for(&m.id);
+                let save = self.solid_path(&m.id);
+                let unsaved = save.is_none();
                 if let Some(r) = self.runs.get_mut(&m.id) {
                     if let Some(s) = &r.link {
                         s.send(work::PushMsg::Build(script));
+                        if let Some(p) = save {
+                            s.send(work::PushMsg::SaveAs(p));
+                        }
                     }
-                    r.status = "building...".into();
+                    r.status = if unsaved { "building... (not saved: give the job a number first, then build again)".into() } else { "building...".into() };
                 }
             }
         }
