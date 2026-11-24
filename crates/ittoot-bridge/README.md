@@ -11,4 +11,6 @@ The OT connection bridge of ITTOOT Solidcraft: the part that knows about PLCs, n
 - `intake`: sorts the documents the user drops in (drawings, schematics, CAD, FDS, DDS, briefs, photos, PLC and HMI code) and says what is still missing.
 - `driver`: the one trait every PLC link implements, and a simulated link for working without a PLC.
 
+The physics (swing and contact, liquid, belts, process plants, the `Physics_01` PLC block) lives in `ittoot-physics`; this crate re-exports it as `physics`, `fluid`, `loads`, `plant`, `physio` and `runner`.
+
 No UI toolkit and no global state; everything is plain data so the app, the CLI and the tests use it the same way.
