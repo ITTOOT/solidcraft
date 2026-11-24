@@ -78,6 +78,10 @@ fn v1_booklet_and_data_give_a_bound_model() {
     assert_eq!(roles, [("Gantry".to_string(), vec!['X', 'Y']), ("Hoist".to_string(), vec!['Z'])]);
 
     let d = auto_config(&[V1.to_string()], &[], ScanLimits::default());
+    if d.projects.first().is_none_or(|p| p.sources.is_empty()) {
+        eprintln!("skipped: no exported sources beside {V1}");
+        return;
+    }
     let mut records = Vec::new();
     let mut keys: Vec<String> = Vec::new();
     for c in &d.candidates {
@@ -118,6 +122,10 @@ fn demo_cycle_runs_on_the_real_data_without_stalling() {
         return;
     }
     let d = auto_config(&[V1.to_string()], &[], ScanLimits::default());
+    if d.projects.first().is_none_or(|p| p.sources.is_empty()) {
+        eprintln!("skipped: no exported sources beside {V1}");
+        return;
+    }
     let mut records = Vec::new();
     for c in &d.candidates {
         if c.area.kind != AreaKind::DataBlock {

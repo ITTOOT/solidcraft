@@ -98,6 +98,7 @@ pub mod panels;
 pub mod parameter_sweep;
 pub mod parameters;
 pub mod parts;
+pub mod physics;
 pub mod plastic;
 pub mod plugin;
 pub mod point_cloud;

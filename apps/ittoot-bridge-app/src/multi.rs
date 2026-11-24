@@ -166,6 +166,7 @@ impl App {
         if let Some(p) = &self.plan {
             keys.extend(devices::device_keys(p, &self.all_keys));
         }
+        keys.extend(self.physics_in_keys());
         for s in self.slots.values() {
             keys.extend(s.bindings.iter().map(|b| b.key.clone()));
             keys.extend(s.scratch.iter().filter(|b| !b.key.is_empty()).map(|b| b.key.clone()));
@@ -176,6 +177,20 @@ impl App {
         keys.sort();
         keys.dedup();
         keys
+    }
+
+    /// Write a value to the PLC signal `key` (scoped to its connection, or the primary's when plain). False when no connection is up for it.
+    pub fn plc_write(&self, key: &str, value: ittoot_bridge::driver::Value) -> bool {
+        let primary = self.settings.active_link.clone();
+        let (c, raw) = split_scope(key);
+        let Some(id) = c.map(str::to_string).or(primary) else { return false };
+        match self.pollers.get(&id) {
+            Some(p) => {
+                p.write(raw, value);
+                true
+            }
+            None => false,
+        }
     }
 
     /// Where the live values come from: one poller for each connection in use, merged into `live`.
@@ -217,6 +232,7 @@ impl App {
                     }
                 }
                 p.want(raw.clone());
+                p.fast(self.settings.physics.enabled && self.design_model.is_some());
             }
         }
         self.link_states.retain(|id, _| by.contains_key(id));

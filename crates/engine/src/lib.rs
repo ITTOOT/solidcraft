@@ -626,6 +626,8 @@ pub struct Session {
     /// Pairs `inspect.clearance` measured, by the bodies' geometry where they stood (shared with
     /// scratch copies): a body that did not change or move is not measured again.
     clearance_cache: std::sync::Arc<std::sync::Mutex<cmd::clearance::PairCache>>,
+    /// The physics run `physics.load` started, shared by copies of the session; not part of the document.
+    pub(crate) physics_run: cmd::physics::SharedRun,
     /// Recent body renames: the design before and after each, and the names, so undo and redo
     /// follow them without evaluating either.
     body_renames: Vec<BodyRename>,
@@ -979,6 +981,7 @@ impl Session {
             placement_index_cache: Default::default(),
             dirty_cache: Default::default(),
             clearance_cache: Default::default(),
+            physics_run: Default::default(),
             body_renames: Vec::new(),
             contact_meshes: Default::default(),
             clipboard: Vec::new(),
@@ -2309,6 +2312,7 @@ impl Session {
             placement_index_cache: Default::default(),
             dirty_cache: Default::default(),
             clearance_cache: self.clearance_cache.clone(),
+            physics_run: self.physics_run.clone(),
             body_renames: self.body_renames.clone(),
             contact_meshes: self.contact_meshes.clone(),
             clipboard: self.clipboard.clone(),

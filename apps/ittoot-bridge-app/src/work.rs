@@ -111,6 +111,10 @@ pub enum PushMsg {
     Colour(Vec<serde_json::Value>),
     /// Save the design under this name once the build before it was accepted (so it is never left Untitled).
     SaveAs(PathBuf),
+    /// Ask Solidcraft which joints its model has (answered as a `joints:` message): the physics only moves joints that are there.
+    Probe,
+    /// Run one engine command and answer `call:<tag>:<its result as JSON>` (`{"error": ...}` when it fails). Never dropped.
+    Call { tag: String, command: String, params: serde_json::Value },
 }
 
 /// A link to a running Solidcraft over its control channel, on a thread of its own.
@@ -154,6 +158,16 @@ impl SolidLink {
                 Ok(n)
             };
             let mut build_ok = false;
+            let mut probe_after = false;
+            // the joints Solidcraft's model has now, as a message
+            let joints_of = |conn: &mut solidcraft_control::client::Connection| -> String {
+                let names = conn
+                    .ask("engine.execute", serde_json::json!({"command": "joint.list", "params": {}}))
+                    .ok()
+                    .and_then(|r| r["result"]["joints"].as_array().map(|a| a.iter().filter_map(|j| j["name"].as_str().map(String::from)).collect::<Vec<_>>()))
+                    .unwrap_or_default();
+                format!("joints:{}", names.join("|"))
+            };
             while let Ok(first) = jobs.recv() {
                 // everything waiting, in order; a drive batch that is already out of date is dropped for the newest one
                 // (builds and colours are never dropped)
@@ -165,6 +179,17 @@ impl SolidLink {
                 let todo: Vec<PushMsg> = waiting.into_iter().enumerate().filter(|(i, m)| !matches!(m, PushMsg::Drive(_)) || Some(*i) == last_drive).map(|(_, m)| m).collect();
                 for msg in todo {
                 match msg {
+                    PushMsg::Probe => {
+                        let _ = say.send(joints_of(&mut conn));
+                    }
+                    PushMsg::Call { tag, command, params } => {
+                        let r = conn.ask("engine.execute", serde_json::json!({"command": command, "params": params}));
+                        let body = match r {
+                            Ok(v) => v["result"].clone(),
+                            Err(e) => serde_json::json!({"error": e.to_string()}),
+                        };
+                        let _ = say.send(format!("call:{tag}:{body}"));
+                    }
                     PushMsg::SaveAs(path) => {
                         if !build_ok {
                             continue;
@@ -197,6 +222,7 @@ impl SolidLink {
                             }
                         }
                         build_ok = failed.is_none();
+                        probe_after = true;
                         let r: Result<usize, String> = match failed {
                             Some(e) => Err(e),
                             None => Ok(n),
@@ -224,6 +250,10 @@ impl SolidLink {
                     }
                 }
                 }
+                if probe_after {
+                    probe_after = false;
+                    let _ = say.send(joints_of(&mut conn));
+                }
             }
         });
         SolidLink { tx, rx }
@@ -237,8 +267,11 @@ impl SolidLink {
 /// Live reads of one OPC UA server on a thread of its own.
 pub struct Poller {
     keys: Sender<Vec<String>>,
+    writes: Sender<(String, ittoot_bridge::driver::Value)>,
     pub rx: Receiver<PollMsg>,
     stop: Arc<AtomicBool>,
+    /// Read ten times a second instead of twice (the physics wants the PLC's positions oftener).
+    fast: Arc<AtomicBool>,
 }
 
 pub enum PollMsg {
@@ -249,9 +282,12 @@ pub enum PollMsg {
 impl Poller {
     pub fn spawn(cfg: OpcUaConfig) -> Poller {
         let (ktx, krx) = channel::<Vec<String>>();
+        let (wtx, wrx) = channel::<(String, ittoot_bridge::driver::Value)>();
         let (tx, rx) = channel();
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
+        let fast = Arc::new(AtomicBool::new(false));
+        let quick = fast.clone();
         std::thread::spawn(move || {
             let mut driver = match OpcUaDriver::new(cfg) {
                 Ok(d) => d,
@@ -271,6 +307,15 @@ impl Poller {
                 while let Ok(k) = krx.try_recv() {
                     keys = k;
                 }
+                // what the application wants written to the PLC (the physics' outputs): the last value of each key
+                let mut last: Vec<(String, ittoot_bridge::driver::Value)> = Vec::new();
+                while let Ok((k, v)) = wrx.try_recv() {
+                    last.retain(|(q, _)| *q != k);
+                    last.push((k, v));
+                }
+                for (k, v) in last {
+                    let _ = driver.write(&k, v);
+                }
                 if !keys.is_empty() {
                     match driver.read(&keys) {
                         Ok(values) => {
@@ -283,7 +328,7 @@ impl Poller {
                         }
                     }
                 }
-                for _ in 0..5 {
+                for _ in 0..(if quick.load(Ordering::Relaxed) { 1 } else { 5 }) {
                     if flag.load(Ordering::Relaxed) {
                         break;
                     }
@@ -292,7 +337,16 @@ impl Poller {
             }
             driver.disconnect();
         });
-        Poller { keys: ktx, rx, stop }
+        Poller { keys: ktx, writes: wtx, rx, stop, fast }
+    }
+
+    /// Write a value to the PLC (on the poller's own thread, before its next read).
+    pub fn write(&self, key: &str, value: ittoot_bridge::driver::Value) {
+        let _ = self.writes.send((key.to_string(), value));
+    }
+
+    pub fn fast(&self, on: bool) {
+        self.fast.store(on, Ordering::Relaxed);
     }
 
     pub fn want(&self, keys: Vec<String>) {

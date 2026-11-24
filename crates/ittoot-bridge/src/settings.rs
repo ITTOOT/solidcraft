@@ -44,6 +44,9 @@ pub struct BridgeSettings {
     /// The job: its number titles every document and model, and names the folder they are saved in.
     #[serde(default)]
     pub job: crate::job::Job,
+    /// The physics of the model: gravity, sway, solid walls, air, liquid, flow.
+    #[serde(default)]
+    pub physics: crate::physics::Physics,
     /// The model project (by name, in the job's Models folder) the Model page works on.
     #[serde(default)]
     pub model_project: Option<String>,
@@ -57,7 +60,7 @@ pub const CURRENT_VERSION: u32 = 1;
 
 impl Default for BridgeSettings {
     fn default() -> Self {
-        BridgeSettings { version: CURRENT_VERSION, projects: Vec::new(), document_folders: Vec::new(), areas: Vec::new(), connections: Vec::new(), overrides: Default::default(), active_link: None, bindings: Default::default(), models: Vec::new(), active_model: None, design_agent: String::new(), design_model_dir: String::new(), job: Default::default(), model_project: None, project_links: Default::default() }
+        BridgeSettings { version: CURRENT_VERSION, projects: Vec::new(), document_folders: Vec::new(), areas: Vec::new(), connections: Vec::new(), overrides: Default::default(), active_link: None, bindings: Default::default(), models: Vec::new(), active_model: None, design_agent: String::new(), design_model_dir: String::new(), job: Default::default(), physics: Default::default(), model_project: None, project_links: Default::default() }
     }
 }
 

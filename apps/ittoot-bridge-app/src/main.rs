@@ -6,6 +6,7 @@
 mod designpage;
 mod engpage;
 mod hmipage;
+mod physpage;
 mod jobpage;
 mod multi;
 mod designwork;
@@ -45,11 +46,12 @@ pub enum Page {
     Design,
     Engineering,
     Hmi,
+    Physics,
     Live,
 }
 
 impl Page {
-    const ALL: [(Page, &'static str, &'static str); 12] = [
+    const ALL: &'static [(Page, &'static str, &'static str)] = &[
         (Page::Settings, "Settings", "settings"),
         (Page::Connections, "Connections", "connections"),
         (Page::Tables, "Tables", "tables"),
@@ -61,6 +63,7 @@ impl Page {
         (Page::Design, "Design", "design"),
         (Page::Engineering, "Engineering", "engineering"),
         (Page::Hmi, "HMI", "hmi"),
+        (Page::Physics, "Physics", "physics"),
         (Page::Live, "Live", "live"),
     ];
 }
@@ -149,6 +152,7 @@ pub struct App {
     pub demo_on: bool,
     pub eng: engpage::EngState,
     pub hmi: hmipage::HmiState,
+    pub phys: physpage::PhysState,
     /// `--compact`: the Model page without the job panel (a small live view beside the model).
     pub hide_job: bool,
     /// `--shot-delay S`: wait this long (live links need time) before taking the picture.
@@ -197,6 +201,8 @@ pub struct ModelRun {
     pub link: Option<work::SolidLink>,
     pub status: String,
     pub push_live: bool,
+    /// The joints Solidcraft's model has (asked after a build and on connecting); `None` until it has answered.
+    pub joints: Option<Vec<String>>,
 }
 
 pub fn data_dir() -> PathBuf {
@@ -261,6 +267,7 @@ impl App {
             demo_on: false,
             eng: Default::default(),
             hmi: Default::default(),
+            phys: Default::default(),
             hide_job: false,
             shot_delay: 0.0,
             started: std::time::Instant::now(),
@@ -659,13 +666,18 @@ impl App {
 
     /// Keep Solidcraft's joints at the machine's positions.
     fn pump_solid(&mut self) {
-        let due = self.last_push.elapsed() >= std::time::Duration::from_millis(200);
-        let cmds = match &self.plan {
+        // the physics needs the PLC's positions oftener: the swing is smooth at ten pictures a second, not five
+        let due = self.last_push.elapsed() >= std::time::Duration::from_millis(if self.physics_active() { 100 } else { 200 });
+        let mut cmds = match &self.plan {
             Some(_) if due && self.active_kind == ittoot_bridge::job::ModelKind::Scratch => model::free_drive_commands(&self.scratch, &self.live),
             Some(p) if due => model::drive_commands(p, &self.bindings, &self.live),
             _ => Vec::new(),
         };
+        if due && self.active_kind != ittoot_bridge::job::ModelKind::Scratch {
+            self.physics_step(&mut cmds);
+        }
         let ids: Vec<String> = self.runs.keys().cloned().collect();
+        let mut answers: Vec<(String, String, String)> = Vec::new();
         for id in ids {
             let cmds_here = if due { self.drive_for(&id, &cmds) } else { Vec::new() };
             // a Solidcraft this bridge started: once its control port answers, connect to it
@@ -677,7 +689,10 @@ impl App {
                 if let (Some(r), Some(m)) = (self.runs.get_mut(&id), target) {
                     r.wait = None;
                     if up {
-                        r.link = Some(work::SolidLink::spawn(m.address(), token, dir));
+                        let link = work::SolidLink::spawn(m.address(), token, dir);
+                        link.send(work::PushMsg::Probe);
+                        r.link = Some(link);
+                        r.joints = None;
                         r.status = format!("connected to Solidcraft on {}", m.address());
                     } else {
                         r.status = format!("Solidcraft did not open its control port {} within a minute", m.port);
@@ -696,12 +711,24 @@ impl App {
             }
             if let Some(s) = &r.link {
                 while let Ok(m) = s.rx.try_recv() {
-                    r.status = m;
+                    if let Some(list) = m.strip_prefix("joints:") {
+                        r.joints = Some(list.split('|').filter(|n| !n.is_empty()).map(String::from).collect());
+                    } else if let Some(call) = m.strip_prefix("call:") {
+                        // answered engine commands (the physics running in Solidcraft): handled below, once this borrow of the runs is over
+                        if let Some((tag, body)) = call.split_once(':') {
+                            answers.push((id.clone(), tag.to_string(), body.to_string()));
+                        }
+                    } else {
+                        r.status = m;
+                    }
                 }
                 if r.push_live && !cmds_here.is_empty() {
                     s.send(work::PushMsg::Drive(cmds_here));
                 }
             }
+        }
+        for (id, tag, body) in answers {
+            self.engine_answer(&id, &tag, &body);
         }
         if due {
             self.last_push = std::time::Instant::now();

@@ -24,4 +24,7 @@ pub mod settings;
 pub mod table;
 pub mod target;
 
+// the physics moved to its own crate so Solidcraft's engine can run it too; these keep the old paths
+pub use ittoot_physics::{fluid, loads, physics, physio, plant, runner};
+
 pub use error::{Error, Result};

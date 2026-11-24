@@ -1,0 +1,14 @@
+{
+  "en": {
+    "cmd.physics.load": "Start Physics",
+    "cmd.physics.reset": "Reset Physics",
+    "cmd.physics.settings": "Physics Settings",
+    "cmd.physics.step": "Step Physics"
+  },
+  "de": {
+    "cmd.physics.load": "Physik starten",
+    "cmd.physics.reset": "Physik zurücksetzen",
+    "cmd.physics.settings": "Physik-Einstellungen",
+    "cmd.physics.step": "Physik-Schritt"
+  }
+}

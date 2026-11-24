@@ -64,6 +64,8 @@ serde_path_to_error = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true }
 web-time = { workspace = true }
+# the digital-twin physics the physics.* commands run (serde only)
+ittoot-physics = { path = "../ittoot-physics" }
 
 [dev-dependencies]
 solidcore-ops = { workspace = true }

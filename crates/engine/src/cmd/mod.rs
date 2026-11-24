@@ -100,6 +100,7 @@ mod metadata;
 pub(crate) mod motion;
 mod notes;
 mod parts;
+pub(crate) mod physics;
 mod plugin;
 mod point_cloud;
 mod point_cloud_deviation;
@@ -391,6 +392,7 @@ pub fn command_specs() -> Vec<&'static CommandSpec> {
     v.extend(joints::COMMANDS.iter());
     v.extend(joints::constraint::COMMANDS.iter());
     v.extend(clearance::COMMANDS.iter());
+    v.extend(physics::COMMANDS.iter());
     v.extend(motion::COMMANDS.iter());
     v.extend(panels::COMMANDS.iter());
     v.extend(config::COMMANDS.iter());

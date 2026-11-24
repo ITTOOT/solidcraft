@@ -96,7 +96,7 @@ impl App {
             });
         });
         egui::Panel::left("nav").exact_size(190.0).resizable(false).frame(egui::Frame::new().fill(BG2).inner_margin(egui::Margin::same(10)).stroke(Stroke::new(1.0, LINE))).show(root, |ui| {
-            for (page, name, _) in Page::ALL {
+            for (page, name, _) in Page::ALL.iter().copied() {
                 let sel = self.page == page;
                 let count = match page {
                     Page::Tables => Some(self.tables.len()),
@@ -129,6 +129,7 @@ impl App {
             Page::Design => self.page_design(ui),
             Page::Engineering => self.page_engineering(ui),
             Page::Hmi => self.page_hmi(ui),
+            Page::Physics => self.page_physics(ui),
             Page::Live => self.page_live(ui),
         });
     }
@@ -963,7 +964,10 @@ impl App {
             ModelAct::Connect => {
                 let dir = self.deployment_dir();
                 let r = self.runs.entry(m.id.clone()).or_default();
-                r.link = Some(work::SolidLink::spawn(m.address(), tok.trim().to_string(), dir));
+                let link = work::SolidLink::spawn(m.address(), tok.trim().to_string(), dir);
+                link.send(work::PushMsg::Probe);
+                r.link = Some(link);
+                r.joints = None;
                 r.status = format!("connecting to {}...", m.address());
             }
             ModelAct::Disconnect => {

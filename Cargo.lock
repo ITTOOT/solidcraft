@@ -3662,6 +3662,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 name = "ittoot-bridge"
 version = "0.44.0"
 dependencies = [
+ "ittoot-physics",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -3713,6 +3714,14 @@ dependencies = [
  "async-opcua",
  "ittoot-bridge",
  "tokio",
+]
+
+[[package]]
+name = "ittoot-physics"
+version = "0.44.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -6840,6 +6849,7 @@ dependencies = [
  "craft-plugin",
  "craft-plugin-wasm",
  "image",
+ "ittoot-physics",
  "log",
  "png",
  "schemars",

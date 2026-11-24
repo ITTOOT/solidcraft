@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 pub const RECORD_VERSION: u32 = 1;
 
 /// The Solidcraft commands the bridge sends. A record that needs any other is refused by `verify`.
-pub const KNOWN_COMMANDS: &[&str] = &["solid.box", "component.create", "component.move_bodies", "occurrence.ground", "joint.create", "joint.drive", "appearance.assign"];
+pub const KNOWN_COMMANDS: &[&str] = &["solid.box", "component.create", "component.move_bodies", "occurrence.ground", "joint.create", "joint.motion_link", "joint.drive", "appearance.assign"];
 
 /// What the bridge needs of Solidcraft.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

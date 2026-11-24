@@ -100,6 +100,8 @@ pub const TABLE: &[(&str, Class)] = &[
     // ITTOOT: the OT connection bridge (PLC data areas, auto-config, dynamic tables, connections, document intake); plain data, std + serde only
     ("ittoot-bridge", Class::Shared),
     // ITTOOT: the OPC UA link (native only; async-opcua, tokio)
+    // ITTOOT: the digital-twin physics (swing, contact, liquid, cartons, process plants); serde only, run by the bridge app and the engine
+    ("ittoot-physics", Class::Shared),
     ("ittoot-opcua", Class::Shared),
     // ITTOOT: SQL sources (PostgreSQL, SQL Server, MySQL), read-only; native only
     ("ittoot-db", Class::Shared),

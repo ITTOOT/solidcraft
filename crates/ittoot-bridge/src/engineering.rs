@@ -42,6 +42,8 @@ pub const TOOLS: &[(&str, &str, &str, &str, &str)] = &[
     ("Change the pipework", "Station N", "Change the ... pipe to DN ... / material ...", "keep the fall of the drain and the colour of the service", "..."),
     ("Change the panel", "Main panel", "Change the panel to ...", "resize from the I/O count, keep 20 % spare", "..."),
     ("Change what drives a joint", "Gantry X", "Drive this joint from the signal ...", "give the scale and offset if the units differ", "..."),
+    ("Change the hoist line", "Hoist", "Change the hoist line to ... (wire rope, chain or none)", "set the design's hoist.line; keep the hook, the hoist stroke and the sway joints", "..."),
+    ("Change the bath mounts", "Station N bath", "Change the bath mounts to ... (rocking or fixed)", "set the design's tank.mount; rocking baths get two joints at their base", "..."),
     ("Free request", "", "", "", ""),
 ];
 
