@@ -40,16 +40,16 @@ fn the_plant_moves_liquid_only_while_the_plc_runs_the_pump_and_opens_the_valves(
     let o = run_with(&mut r, &s, &d, Some(&joints), &[], &[], 0.5);
     assert!(drive(&o, "Vessel T-2 Level").is_none_or(|v| v.abs() < 0.5), "{o:?}");
     // the PLC runs P-1 with both valves open: half a second at 600 L/min is 5 L of 1000, so 10 mm of 2000
-    let sig = [("\"Physics_01\".pump_P_1", 1.0), ("\"Physics_01\".valve_XV_1", 1.0), ("\"Physics_01\".valve_XV_2", 1.0)];
-    assert!(r.input_keys(&s).contains(&"\"Physics_01\".pump_P_1".to_string()));
+    let sig = [("Physics_01.pump_P_1", 1.0), ("Physics_01.valve_XV_1", 1.0), ("Physics_01.valve_XV_2", 1.0)];
+    assert!(r.input_keys(&s).contains(&"Physics_01.pump_P_1".to_string()));
     let o = run_with(&mut r, &s, &d, Some(&joints), &sig, &[], 0.5);
     let (up, down) = (drive(&o, "Vessel T-2 Level").expect("up"), drive(&o, "Vessel T-1 Level").expect("down"));
     assert!((up - 10.0).abs() < 1.5 && (down + 10.0).abs() < 1.5, "{up} {down}");
     assert!(r.message.is_empty());
     // levels go back to the PLC, once, and only when they change
-    assert!(o.writes.iter().any(|w| w.0 == "\"Physics_01\".level_T_2" && matches!(w.1, WriteVal::Real(p) if p > 0.0)), "{:?}", o.writes);
+    assert!(o.writes.iter().any(|w| w.0 == "Physics_01.level_T_2" && matches!(w.1, WriteVal::Real(p) if p > 0.0)), "{:?}", o.writes);
     // the pump stops: the surfaces stay and nothing is offered again
-    let stopped = [("\"Physics_01\".pump_P_1", 0.0), ("\"Physics_01\".valve_XV_1", 1.0), ("\"Physics_01\".valve_XV_2", 1.0)];
+    let stopped = [("Physics_01.pump_P_1", 0.0), ("Physics_01.valve_XV_1", 1.0), ("Physics_01.valve_XV_2", 1.0)];
     let o = run_with(&mut r, &s, &d, Some(&joints), &stopped, &[], 0.5);
     assert!(o.drives.is_empty() && o.writes.is_empty(), "{o:?}");
 }
@@ -58,13 +58,13 @@ fn the_plant_moves_liquid_only_while_the_plc_runs_the_pump_and_opens_the_valves(
 fn a_write_that_did_not_reach_the_plc_is_offered_again() {
     let (mut r, s, d) = (Runner::new(), linked(), plant_design());
     let joints = ["Vessel T-1 Level", "Vessel T-2 Level"];
-    let sig = [("\"Physics_01\".pump_P_1", 1.0), ("\"Physics_01\".valve_XV_1", 1.0), ("\"Physics_01\".valve_XV_2", 1.0)];
+    let sig = [("Physics_01.pump_P_1", 1.0), ("Physics_01.valve_XV_1", 1.0), ("Physics_01.valve_XV_2", 1.0)];
     run_with(&mut r, &s, &d, Some(&joints), &sig, &[], 0.0);
     let o = run_with(&mut r, &s, &d, Some(&joints), &[], &[], 0.0);
     assert!(o.writes.is_empty(), "{:?}", o.writes);
-    r.forget("\"Physics_01\".level_T_2");
+    r.forget("Physics_01.level_T_2");
     let o = run_with(&mut r, &s, &d, Some(&joints), &[], &[], 0.0);
-    assert!(o.writes.iter().any(|w| w.0 == "\"Physics_01\".level_T_2"), "{:?}", o.writes);
+    assert!(o.writes.iter().any(|w| w.0 == "Physics_01.level_T_2"), "{:?}", o.writes);
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn a_carton_released_on_a_belt_is_driven_on_its_two_joints_and_the_photo_eye_is_
     }
     assert!(drive(&all, "Load 1 X").is_some() && drive(&all, "Load 1 Z").is_some_and(|z| (z - 2300.0).abs() < 1.0), "{all:?}");
     assert!(r.released >= 1 && r.line_out.on_belts == 1 && r.message.is_empty());
-    assert!(all.writes.iter().any(|w| w.0 == "\"Physics_01\".pec_Z1"), "{:?}", all.writes);
+    assert!(all.writes.iter().any(|w| w.0 == "Physics_01.pec_Z1"), "{:?}", all.writes);
     // a model without the carton joints is told to build
     let mut bare = Runner::new();
     let o = run_with(&mut bare, &s, &d, Some(&[]), &[], &[], 0.5);

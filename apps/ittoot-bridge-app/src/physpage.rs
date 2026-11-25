@@ -549,10 +549,10 @@ mod tests {
         app.physics_step(&mut cmds);
         assert!(cmds.is_empty() || driven(&cmds, "Vessel T-2 Level").is_some_and(|v| v.abs() < 0.5), "{cmds:?}");
         // the PLC runs P-1 with both valves open: the keys are the data block's members, with the ids as tag names
-        for k in ["\"Physics_01\".pump_P_1", "\"Physics_01\".valve_XV_1", "\"Physics_01\".valve_XV_2"] {
+        for k in ["Physics_01.pump_P_1", "Physics_01.valve_XV_1", "Physics_01.valve_XV_2"] {
             app.live.insert(k.to_string(), V::Bool(true));
         }
-        assert!(app.physics_in_keys().contains(&"\"Physics_01\".pump_P_1".to_string()));
+        assert!(app.physics_in_keys().contains(&"Physics_01.pump_P_1".to_string()));
         app.phys.last = Some(Instant::now() - std::time::Duration::from_secs(10));
         let mut cmds = Vec::new();
         app.physics_step(&mut cmds);
@@ -562,7 +562,7 @@ mod tests {
         assert!((up - 10.0).abs() < 1.5 && (down + 10.0).abs() < 1.5, "{up} {down}");
         assert!(app.phys.message.is_empty());
         // the pump is stopped: the surfaces stay
-        app.live.insert("\"Physics_01\".pump_P_1".to_string(), V::Bool(false));
+        app.live.insert("Physics_01.pump_P_1".to_string(), V::Bool(false));
         app.phys.last = Some(Instant::now() - std::time::Duration::from_secs(10));
         let mut cmds = Vec::new();
         app.physics_step(&mut cmds);
@@ -612,9 +612,9 @@ mod tests {
         app.phys.eng.busy = true;
         app.phys.eng.loaded = Some(1);
         // a step answer: busy ends, its write cannot reach a PLC that is not linked and is offered again at the next step, the reply is kept
-        let body = json!({"writes": [{"key": "\"Physics_01\".level_T_2", "value": 12.0, "bool": false}], "message": "", "levels": {"T-2": 12.0}}).to_string();
+        let body = json!({"writes": [{"key": "Physics_01.level_T_2", "value": 12.0, "bool": false}], "message": "", "levels": {"T-2": 12.0}}).to_string();
         app.engine_answer("", "step", &body);
-        assert!(!app.phys.eng.busy && app.phys.eng.unsent == vec!["\"Physics_01\".level_T_2".to_string()]);
+        assert!(!app.phys.eng.busy && app.phys.eng.unsent == vec!["Physics_01.level_T_2".to_string()]);
         assert_eq!(app.phys.eng.reply["levels"]["T-2"], 12.0);
         assert!(app.phys.eng.error.is_empty());
         // Solidcraft lost the run (restarted, or a new document): the error is shown and the next tick loads the run again

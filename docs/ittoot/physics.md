@@ -50,4 +50,10 @@ Every number is a setting (`physics::FIELDS` lists them with range and help text
 
 - Contact is the exact oriented-box test in `physics.rs`, run on the design's solids. The `dynamics` crate (multibody solver) has no contacts and is not used.
 - The run does not see edits made in Solidcraft after the design was loaded; load the design again.
-- Nothing has been run against a real PLC yet.
+- Run against a real PLC only in the simulator (PLCSIM Advanced): see "Run against a PLC" below.
+
+## Run against a PLC
+
+`cargo run -p ittoot-bridge-app --example physlive -- <design folder> opc.tcp://<plc ip>:4840` runs the physics against a PLC that has the `Physics_01` block: it reads the valve signals, steps a hoist design, and writes `blockedX`, `contact` and the other flags back, then reads them over OPC UA to check. Keys in the PLC links are plain (`Physics_01.fill_T2`, no quotes): the OPC UA driver adds the quotes itself.
+
+Result on 2026-11-25 (HoistGantry v1.0.1 copy with `Physics_01` imported, PLCSIM Advanced instance `HG_Sim`, TIA V18): all five checks passed (valve opened in the PLC raised the bath level by 137 mm; driving into the wall set `blockedX` and `contact` in the PLC; backing off cleared them; every write reached the PLC). The values were also read back through PLCSIM's own API. Not run: a real CPU, the HMI, or Solidcraft in the same run.

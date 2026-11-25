@@ -6,7 +6,7 @@ fn an_id_becomes_a_legal_tag_name_and_fills_a_key_template() {
     assert_eq!(tag_id("XV-101"), "XV_101");
     assert_eq!(tag_id("T2"), "T2");
     assert_eq!(tag_id("1A"), "_1A");
-    assert_eq!(key("\"Physics_01\".valve_{id}", "XV-101"), "\"Physics_01\".valve_XV_101");
+    assert_eq!(key("Physics_01.valve_{id}", "XV-101"), "Physics_01.valve_XV_101");
 }
 
 #[test]
@@ -23,7 +23,7 @@ fn the_block_for_each_application_has_exactly_the_members_the_standard_links_nam
     for want in ["pump_P_101 : Bool", "valve_XV_101 : Bool", "level_T_101 : Real", "high_T_101 : Bool", "low_T_101 : Bool"] {
         assert!(s.contains(want), "{want} in {s}");
     }
-    assert_eq!(key(&links.plant_level_key, "T-101"), "\"Physics_01\".level_T_101");
+    assert_eq!(key(&links.plant_level_key, "T-101"), "Physics_01.level_T_101");
     let hoist = json!({"meta": {"application": "plating_line"}});
     let s = scl(&hoist, &["T2".to_string(), "T2".to_string(), "T3".to_string()]);
     // a bath named twice gives one member; every axis flag is there

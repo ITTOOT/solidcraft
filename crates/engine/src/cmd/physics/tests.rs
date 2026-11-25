@@ -30,11 +30,11 @@ fn plant_design() -> Value {
 }
 
 fn signals(pump: f64) -> Value {
-    json!({"\"Physics_01\".pump_P_1": pump, "\"Physics_01\".valve_XV_1": 1, "\"Physics_01\".valve_XV_2": 1})
+    json!({"Physics_01.pump_P_1": pump, "Physics_01.valve_XV_1": 1, "Physics_01.valve_XV_2": 1})
 }
 
 fn linked() -> Value {
-    json!({"plc": {"plant_pump_key": "\"Physics_01\".pump_{id}", "plant_valve_key": "\"Physics_01\".valve_{id}", "plant_level_key": "\"Physics_01\".level_{id}"}})
+    json!({"plc": {"plant_pump_key": "Physics_01.pump_{id}", "plant_valve_key": "Physics_01.valve_{id}", "plant_level_key": "Physics_01.level_{id}"}})
 }
 
 /// A joint's value in mm, as joint.list gives it.
@@ -62,14 +62,14 @@ fn a_step_drives_the_models_own_joints_with_what_the_pumps_did() {
     assert!((t1.abs() - 10.0).abs() < 2.0, "{t1}");
     // the PLC is given the levels (once), and the levels are in the reply
     let w = r["writes"].as_array().cloned().unwrap_or_default();
-    assert!(w.iter().any(|x| x["key"] == "\"Physics_01\".level_T_2" && x["bool"] == false), "{r}");
+    assert!(w.iter().any(|x| x["key"] == "Physics_01.level_T_2" && x["bool"] == false), "{r}");
     assert!(r["levels"]["T-2"].as_f64().is_some_and(|p| p > 0.4), "{r}");
     // with the pump stopped nothing moves and nothing is offered again
     let r = run(&mut s, "physics.step", json!({"dt": 0.5, "signals": signals(0.0)}));
     assert!(r["drives"].as_array().is_some_and(Vec::is_empty) && r["writes"].as_array().is_some_and(Vec::is_empty), "{r}");
     // a write the PLC did not take is offered again
-    let r = run(&mut s, "physics.step", json!({"dt": 0.0, "signals": signals(0.0), "unsent": ["\"Physics_01\".level_T_2"]}));
-    assert!(r["writes"].as_array().is_some_and(|w| w.iter().any(|x| x["key"] == "\"Physics_01\".level_T_2")), "{r}");
+    let r = run(&mut s, "physics.step", json!({"dt": 0.0, "signals": signals(0.0), "unsent": ["Physics_01.level_T_2"]}));
+    assert!(r["writes"].as_array().is_some_and(|w| w.iter().any(|x| x["key"] == "Physics_01.level_T_2")), "{r}");
 }
 
 #[test]

@@ -21,7 +21,7 @@ pub fn key(template: &str, id: &str) -> String {
 
 /// The links that match the block `scl` writes.
 pub fn standard_links() -> PlcLinks {
-    let m = |n: &str| format!("\"{DB}\".{n}");
+    let m = |n: &str| format!("{DB}.{n}");
     PlcLinks {
         fill_key: m("fill_{id}"),
         drain_key: m("drain_{id}"),

@@ -336,11 +336,11 @@ fn run_engine(design: &Value, run: &mut impl FnMut(&str, Value) -> Result<Value,
             let pump = |tag: &str| if (tag == "P-101" && t < 20.0) || (tag == "P-201" && t >= 20.0) { 1.0 } else { 0.0 };
             for p in design["geometry"]["process"]["pumps"].as_array().into_iter().flatten() {
                 let tag = p["tag"].as_str().unwrap_or("");
-                signals.insert(format!("\"Physics_01\".pump_{}", ittoot_bridge::physio::tag_id(tag)), json!(pump(tag)));
+                signals.insert(format!("Physics_01.pump_{}", ittoot_bridge::physio::tag_id(tag)), json!(pump(tag)));
             }
             for l in design["geometry"]["process"]["lines"].as_array().into_iter().flatten() {
                 if let Some(v) = l["valve"].as_str().filter(|v| !v.is_empty()) {
-                    signals.insert(format!("\"Physics_01\".valve_{}", ittoot_bridge::physio::tag_id(v)), json!(1.0));
+                    signals.insert(format!("Physics_01.valve_{}", ittoot_bridge::physio::tag_id(v)), json!(1.0));
                 }
             }
         } else if app != "conveyor_line" && app != "robot_cell" {
