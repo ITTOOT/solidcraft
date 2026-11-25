@@ -65,13 +65,16 @@ pub(crate) struct LazyMove {
     made: std::sync::OnceLock<std::sync::Arc<Brep>>,
 }
 
-/// How many lazily moved records have been moved ([`RecordCell::Moved`]), for diagnostics.
-static LAZY_MOVES_MADE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+thread_local! {
+    /// How many lazily moved records this thread has moved ([`RecordCell::Moved`]), for diagnostics. Per thread, so a test
+    /// that counts the moves its own calls make is not disturbed by tests running beside it.
+    static LAZY_MOVES_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
-/// How many records placed lazily have been moved since the process started: a placement's
+/// How many records placed lazily this thread has moved since it started: a placement's
 /// geometry needed exactly ([`crate::ops::transform_matrix`]).
 pub fn lazy_moves_made() -> usize {
-    LAZY_MOVES_MADE.load(std::sync::atomic::Ordering::Relaxed)
+    LAZY_MOVES_MADE.with(std::cell::Cell::get)
 }
 
 impl LazyMove {
@@ -81,7 +84,7 @@ impl LazyMove {
 
     fn record(&self) -> &std::sync::Arc<Brep> {
         self.made.get_or_init(|| {
-            LAZY_MOVES_MADE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            LAZY_MOVES_MADE.with(|c| c.set(c.get() + 1));
             // The record was checked to move exactly before it was placed this way; should that
             // fail after all, it is mapped, and as a last resort kept where it is (logged).
             let moved = solidcraft_geom::brep::placement::moved(&self.source, &self.motion)

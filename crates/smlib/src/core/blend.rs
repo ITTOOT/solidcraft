@@ -1261,6 +1261,7 @@ fn law_pinches(degree: usize, knots: &[f64], radii: &[f64]) -> bool {
 /// more than `SM_EFF_ZERO * (1 + |left| + |right|)`. The slope is the derivative B-spline's,
 /// `Q_i = p (r_{i+1} - r_i) / (u_{i+p+1} - u_{i+1})`; it jumps only at a knot repeated `m >= p`
 /// times, from `Q_{s-2}` to `Q_{s+m-1-p}` (`s` the knot's first index).
+#[cfg(test)]
 fn law_has_corner(degree: usize, knots: &[f64], radii: &[f64]) -> bool {
     const EFF_ZERO: f64 = 1e-12;
     let p = degree;
@@ -1362,11 +1363,8 @@ pub(crate) fn fillet_variable(
         let Some(law) = law_along(k, &w, e, start, degree, knots, radii)? else {
             return Ok(Err(Error::Status(INVALID_INPUT)));
         };
-        // A law with a corner splits the round's face there (`SplitFilletFacesAtRadiusCorners`,
-        // fork 6eecf04), which solidcore does not have.
-        if law_has_corner(degree, knots, radii) {
-            return Ok(Err(Error::Unsupported));
-        }
+        // A law with a corner splits the round's face there (`SplitFilletFacesAtRadiusCorners`, fork 6eecf04): solidcore's
+        // law corners (`blend::law_corners`) do, so it is built like any other law.
         // The round is the union of its balls (smlib#78, solidcore#2262):
         // each ball touches it along the circle shifted
         // -r r'/|c'| from its great circle. A law whose balls fold over one another is refused

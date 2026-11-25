@@ -598,7 +598,9 @@ fn a_hole_wider_than_the_part_says_it_removes_all_of_it() {
     let mut s = Session::default();
     run(&mut s, "parameters.add", json!({"name": "hd", "expression": "40 mm"}));
     run(&mut s, "solid.box", json!({"length": 40, "width": 30, "height": 10, "name": "Plate"}));
-    run(&mut s, "solid.hole", json!({"position": [10, 10, 10], "diameter": "hd", "name": "H1"}));
+    // 0.1 mm clear of the plate's edge y = 30: a circle exactly tangent to a side leaves two pieces touching along a line, which a
+    // kernel may keep as one body or part into two, and this test is about the message
+    run(&mut s, "solid.hole", json!({"position": [10, 9.9, 10], "diameter": "hd", "name": "H1"}));
     assert_eq!(said(&s, "H1"), "");
     assert_eq!(s.model.state().bodies.len(), 1);
     change(&mut s, "hd", "100 mm");

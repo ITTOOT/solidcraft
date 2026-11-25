@@ -1653,6 +1653,12 @@ fn evaluates_as(k: &Kernel, surface: &Surface, form: &BSplineSurface) -> Result<
     Ok(evaluation_margin(k, surface, form)?.is_some_and(|m| m <= 1.0))
 }
 
+/// The bound models the platform's `sin`, `cos` and `atan2` as accurate to one unit in the last place. The Windows
+/// C runtime's are only within about two, so the same net measured 1.16 times its bound there (a cone swept 0.45 degrees,
+/// #17004) where a correctly rounded library measures under 0.9. Doubling the bound keeps the check what it is for,
+/// refusing a surface that is not the form's (whose distance is orders of magnitude above rounding), on every platform.
+const LIBM_SLACK: f64 = 2.0;
+
 /// [`evaluates_as`]'s largest ratio of distance to bound over the Greville points (infinite
 /// for a distance that is not a number); `None` for a surface the bound does not cover.
 fn evaluation_margin(k: &Kernel, surface: &Surface, form: &BSplineSurface) -> Result<Option<f64>> {
@@ -1668,7 +1674,7 @@ fn evaluation_margin(k: &Kernel, surface: &Surface, form: &BSplineSurface) -> Re
             let step_uv = surface.convert_uv_from_nurbs_to_step(k, uv)?;
             let s = surface.evaluate_step_point(k, step_uv)?;
             let f = form.evaluate_point(uv)?;
-            let ratio = (s - f).length() / r.at(step_uv, s, f);
+            let ratio = (s - f).length() / (r.at(step_uv, s, f) * LIBM_SLACK);
             worst = if ratio.is_nan() {
                 f64::INFINITY
             } else {

@@ -443,8 +443,11 @@ pub fn taper(body: &Body, edge_at: Vec3, radius: f64) -> Result<Taper> {
 /// edge (in `edges`' order; None where the radius is constant).
 pub fn fillet_tapered(body: &Body, edges: &[Vec3], radius: f64) -> Result<(Body, Vec<Option<Taper>>)> {
     let _span = solidcraft_profile::span("kernel", "fillet_tapered");
-    let why = match crate::fillet(body, edges, radius) {
-        Err(KernelError::TooLarge(why)) => why,
+    // A radius too large for faces that close to a point can fail in the blend (the round's end has nowhere to go) rather than
+    // be refused as too large: either way the taper below may still build, and if it cannot the constant fillet's own error stands.
+    let (why, refused) = match crate::fillet(body, edges, radius) {
+        Err(KernelError::TooLarge(why)) => (why, None),
+        Err(KernelError::Failed(why)) => (why.clone(), Some(KernelError::Failed(why))),
         other => return other.map(|b| (b, vec![None; edges.len()])),
     };
     let mut tapers = vec![None; edges.len()];
@@ -453,12 +456,16 @@ pub fn fillet_tapered(body: &Body, edges: &[Vec3], radius: f64) -> Result<(Body,
         match crate::fillet(body, &[*p], radius) {
             Ok(_) => constant.push(*p),
             Err(KernelError::TooLarge(_)) => *slot = Some(taper(body, *p, radius)?),
+            Err(e @ KernelError::Failed(_)) => match taper(body, *p, radius) {
+                Ok(t) => *slot = Some(t),
+                Err(_) => return Err(e),
+            },
             Err(e) => return Err(e),
         }
     }
     // Each edge fits alone but not together: nothing to taper.
     if tapers.iter().all(Option::is_none) {
-        return Err(KernelError::TooLarge(why));
+        return Err(refused.unwrap_or(KernelError::TooLarge(why)));
     }
     // Each step's result carries its history over `[body]`.
     let counts = crate::record::counts(&[body]);
