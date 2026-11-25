@@ -53,6 +53,22 @@ pub struct PhysicsStepParams {
 #[schemars(deny_unknown_fields)]
 pub struct PhysicsResetParams {}
 
+/// Take the solids' sizes and places from the document as drawn now.
+#[derive(Debug, Deserialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct PhysicsSyncParams {}
+
+/// What `physics.sync` returns.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct PhysicsSynced {
+    /// Solid bodies of the design that were found in the document and measured again.
+    pub updated: usize,
+    /// Solid bodies of the design that were moved or resized by the edit.
+    pub changed: usize,
+    /// Names of solid bodies the document does not have (the design's numbers are kept for these).
+    pub missing: Vec<String>,
+}
+
 /// What `physics.load` returns.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct PhysicsLoaded {

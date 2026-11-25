@@ -29,12 +29,13 @@ A joint the drawn model does not have is not driven, and the page (or the comman
 
 ## Engine commands
 
-All four are programmatic (no dialogs), do not change the document, and leave no undo step. The run lives in the session and is not saved.
+All five are programmatic (no dialogs), do not change the document, and leave no undo step. The run lives in the session and is not saved.
 
 - `physics.load {design, settings?, axes?}` starts a run. `axes` names the gantry's X, Y and Z joints.
 - `physics.settings {settings}` changes settings in place. A name the settings do not have, or the wrong kind of value, is refused.
 - `physics.step {dt, commanded?, signals?, apply?, unsent?}` advances the run and drives the document's own joints with `joint.drive`. `commanded` is the PLC's value for each axis, `signals` are PLC values by key (a bool is 0 or 1, a valve above 1 is a percentage). The reply has `drives`, `writes` (what the PLC should be given), `blocked`, `hits`, cartons and levels.
 - `physics.reset` starts again from rest.
+- `physics.sync` measures the design's fixed solids (and tank walls) again from the bodies as drawn in the document, matched by body name, so an edit made after the load, such as a moved wall, is what the physics meets from the next step (the swing starts from rest). It reports `updated`, `changed` and `missing` (names the document lacks; the design's numbers are kept for those).
 
 Try it: `cargo run -p ittoot-bridge-app --example physdemo -- <design folder> <control port> engine <screenshots folder>`.
 
@@ -49,7 +50,7 @@ Every number is a setting (`physics::FIELDS` lists them with range and help text
 ## What it does not do
 
 - Contact is the exact oriented-box test in `physics.rs`, run on the design's solids. The `dynamics` crate (multibody solver) has no contacts and is not used.
-- The run does not see edits made in Solidcraft after the design was loaded; load the design again.
+- Edits made in Solidcraft after the load are seen only after `physics.sync` (fixed solids and tank walls; boxes only, cylinders keep the design's numbers).
 - Run against a real PLC only in the simulator (PLCSIM Advanced): see "Run against a PLC" below.
 
 ## Run against a PLC

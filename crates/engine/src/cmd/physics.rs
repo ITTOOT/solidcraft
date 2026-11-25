@@ -16,7 +16,7 @@ use super::CommandSpec;
 use crate::params::bad;
 use crate::schema::physics::{
     PhysicsDrive, PhysicsLoadParams, PhysicsLoaded, PhysicsReset, PhysicsResetParams, PhysicsSettings, PhysicsSettingsParams, PhysicsStep, PhysicsStepParams,
-    PhysicsWrite,
+    PhysicsSyncParams, PhysicsSynced, PhysicsWrite,
 };
 use crate::schema::{TypedContract, output_schema_for};
 use crate::{Result, Session};
@@ -44,6 +44,7 @@ const LOAD: TypedContract<PhysicsLoadParams> = TypedContract::new();
 const SETTINGS: TypedContract<PhysicsSettingsParams> = TypedContract::new();
 const STEP: TypedContract<PhysicsStepParams> = TypedContract::new();
 const RESET: TypedContract<PhysicsResetParams> = TypedContract::new();
+const SYNC: TypedContract<PhysicsSyncParams> = TypedContract::new();
 
 pub static COMMANDS: &[CommandSpec] = &[
     CommandSpec::new("physics.load", "Start Physics", crate::checked!("physics.load", load))
@@ -79,6 +80,12 @@ pub static COMMANDS: &[CommandSpec] = &[
         .contract(&RESET)
         .output(output_schema_for::<PhysicsReset>)
         .params("→ reset: the swing, levels, cartons and vessels start again from rest (a run must have been started)"),
+    CommandSpec::new("physics.sync", "Sync Physics", crate::checked!("physics.sync", sync))
+        .icon("drive")
+        .noundo()
+        .contract(&SYNC)
+        .output(output_schema_for::<PhysicsSynced>)
+        .params("→ updated; changed; missing (the fixed solids of the design are measured again from the bodies as drawn in this document, so an edit made after physics.load, such as a moved wall, is what the physics meets from the next step)"),
 ];
 
 fn load(s: &mut Session, p: &Value) -> Result<Value> {
@@ -209,6 +216,45 @@ fn reset(s: &mut Session, _: &Value) -> Result<Value> {
     run.stamp += 1;
     run.runner = Runner::new();
     Ok(json!({"reset": true}))
+}
+
+/// A body's box as the design agent writes it, measured on the document's body.
+fn measured(b: &solidcraft_geom::Aabb3) -> Option<([f64; 3], [f64; 3])> {
+    let (lo, hi) = ([b.min.x, b.min.y, b.min.z], [b.max.x, b.max.y, b.max.z]);
+    (lo.iter().chain(hi.iter()).all(|v| v.is_finite()) && (0..3).all(|k| hi[k] > lo[k])).then(|| (lo, [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]]))
+}
+
+fn sync(s: &mut Session, _: &Value) -> Result<Value> {
+    let cmd = "physics.sync";
+    let state = s.world_state()?;
+    let mut slot = lock(&s.physics_run);
+    let Some(run) = slot.as_mut() else { return Err(bad(cmd, "no physics run: physics.load starts one")) };
+    let (mut updated, mut changed, mut missing) = (0usize, 0usize, Vec::new());
+    if let Some(parts) = run.design["geometry"]["parts"].as_array_mut() {
+        for part in parts.iter_mut().filter(|p| p["grounded"] != false || p["name"].as_str().is_some_and(|n| n.starts_with("Tank ") && !n.contains(" mount"))) {
+            let Some(bodies) = part["bodies"].as_array_mut() else { continue };
+            for b in bodies.iter_mut().filter(|b| b["kind"] != "cyl") {
+                let Some(name) = b["name"].as_str().map(str::to_string) else { continue };
+                let found = state.bodies.iter().find(|x| x.name == name).and_then(|x| measured(&x.mesh_bounds()));
+                let Some((lo, size)) = found else {
+                    missing.push(name);
+                    continue;
+                };
+                updated += 1;
+                let same = |key: &str, v: [f64; 3]| (0..3).all(|k| (b[key][k].as_f64().unwrap_or(f64::NAN) - v[k]).abs() < 0.01);
+                if !(same("corner", lo) && same("size", size)) {
+                    changed += 1;
+                    b["corner"] = json!(lo);
+                    b["size"] = json!(size);
+                }
+            }
+        }
+    }
+    if changed > 0 {
+        // the world is built again from the new boxes (the swing starts from rest)
+        run.stamp += 1;
+    }
+    Ok(json!({"updated": updated, "changed": changed, "missing": missing}))
 }
 
 #[cfg(test)]

@@ -157,3 +157,19 @@ fn a_physics_run_changes_nothing_in_the_document_and_leaves_no_undo_step() {
     run(&mut s, "physics.reset", json!({}));
     assert_eq!(s.undo.len(), undo);
 }
+
+#[test]
+fn sync_takes_a_fixed_solids_box_from_the_document_as_drawn_now() {
+    let mut s = model();
+    assert!(s.execute("physics.sync", &json!({})).is_err(), "no run yet");
+    let name = s.world_state().ok().and_then(|st| st.bodies.first().map(|b| b.name.clone())).expect("a body");
+    let design = json!({"meta": {"application": "process"}, "geometry": {"parts": [
+        {"name": "Wall", "grounded": true, "bodies": [{"name": name, "corner": [0, 0, 0], "size": [1, 1, 1]}, {"name": "Not drawn", "corner": [0, 0, 0], "size": [1, 1, 1]}]}]}});
+    run(&mut s, "physics.load", json!({"design": design}));
+    let r = run(&mut s, "physics.sync", json!({}));
+    assert_eq!((r["updated"].as_u64(), r["changed"].as_u64()), (Some(1), Some(1)), "{r}");
+    assert_eq!(r["missing"], json!(["Not drawn"]));
+    // a second sync finds nothing more to change
+    let r = run(&mut s, "physics.sync", json!({}));
+    assert_eq!(r["changed"].as_u64(), Some(0), "{r}");
+}
