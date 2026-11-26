@@ -89,7 +89,10 @@ fn a_setback_too_short_for_the_fill_is_refused_naming_the_one_that_builds() {
         Err(KernelError::Invalid(why)) => why,
         other => panic!("setback 3.5: {:?}", other.map(|b| b.face_count())),
     };
-    assert!(why.contains(&format!("{SETBACK_AT_LEAST}3.5595 mm")), "{why}");
-    let out = fillet_setback(&b, &edges, 3.0, &[(corner, 3.5595)]).unwrap();
+    // The least is found on a grid of thousandths of the scale, certified by a convexity test that flips with the last digits of
+    // the platform's maths: 3.5595 where the reference runs land, 3.563 on Windows. Either is the one that builds.
+    let named: f64 = why.split(SETBACK_AT_LEAST).nth(1).and_then(|t| t.split(" mm").next()).and_then(|n| n.parse().ok()).unwrap_or_else(|| panic!("{why}"));
+    assert!((named - 3.5595).abs() < 0.005 * 3.5595, "{why}");
+    let out = fillet_setback(&b, &edges, 3.0, &[(corner, named)]).unwrap();
     assert!(out.validity().is_empty(), "{:?}", out.validity());
 }

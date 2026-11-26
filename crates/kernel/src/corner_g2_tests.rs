@@ -89,7 +89,8 @@ fn the_box_corner_g2_patch_is_a_closed_solid_curvature_continuous_to_its_neighbo
     let mb = measure(&ball).unwrap();
     eprintln!("G2 corner: faces {} edges {} vertices {}, volume {:.6} (ball {:.6})", m.faces, m.edges, m.vertices, m.volume, mb.volume);
     assert_eq!(m.faces, 10);
-    assert!((m.bbox.min - Vec3::ZERO).len() < 1e-6 && (m.bbox.max - Vec3::new(60.0, 40.0, 20.0)).len() < 1e-6, "{:?}", m.bbox);
+    // within the box to 1e-4 mm: the patch's own extent overshoots it by 7e-6 where the platform's maths round otherwise
+    assert!((m.bbox.min - Vec3::ZERO).len() < 1e-4 && (m.bbox.max - Vec3::new(60.0, 40.0, 20.0)).len() < 1e-4, "{:?}", m.bbox);
     let (all, clear, n) = corner_seams(&g2, 0.15);
     let (ball_all, ball_clear, _) = corner_seams(&ball, 0.15);
     eprintln!(
@@ -386,6 +387,10 @@ fn a_setback_too_short_for_the_fill_names_what_solidcores_corner_needs() {
     let edges = [Vec3::new(20.0, 30.0, 20.0), Vec3::new(40.0, 15.0, 20.0), Vec3::new(40.0, 30.0, 10.0)];
     let corner = Vec3::new(40.0, 30.0, 20.0);
     let short = fillet_g2_corners(&body, &edges, 3.0, &[(corner, 3.5)]).unwrap_err().to_string();
-    assert!(short.contains("is too short for its corner's fill: solidcore's corner needs a setback of at least 3.5595 mm"), "{short}");
+    // 3.5595 on the reference runs, 3.563 on Windows: the least is certified on a grid of thousandths by a test that flips with the
+    // last digits of the platform's maths
+    let (_, tail) = short.split_once("is too short for its corner's fill: solidcore's corner needs a setback of at least ").unwrap_or_else(|| panic!("{short}"));
+    let named: f64 = tail.split(" mm").next().and_then(|n| n.parse().ok()).unwrap_or_else(|| panic!("{short}"));
+    assert!((named - 3.5595).abs() < 0.005 * 3.5595, "{short}");
     assert!(!short.contains("builds"), "{short}");
 }
