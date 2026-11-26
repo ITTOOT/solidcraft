@@ -576,7 +576,7 @@ impl App {
         };
     }
 
-    /// Ask the design agent for the rail and baths of this machine: one bath per PLC station.
+    /// Ask the design agent for the rail and tanks of this machine: one tank per PLC station.
     pub fn start_design_model(&mut self, model: &str) {
         let stations = station_points(&self.records);
         let Some(out) = self.settings.job.design_dir(model) else {
@@ -584,7 +584,7 @@ impl App {
             return;
         };
         if stations.is_empty() {
-            self.design_msg = "No stations in the data to build baths from.".into();
+            self.design_msg = "No stations in the data to build tanks from.".into();
             return;
         }
         self.pending_model = model.to_string();

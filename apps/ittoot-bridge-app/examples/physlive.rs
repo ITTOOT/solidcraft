@@ -1,7 +1,7 @@
 //! Runs the physics against a real PLC over OPC UA, with no Solidcraft: the physics reads the PLC's `Physics_01` valve signals, steps a hoist
 //! design, and writes the flags it finds (stopped by a solid, contact, slack, overload) back into the PLC's data block.
 //! usage: physlive <design folder> <opc.tcp://ip:4840>
-//! Checks (each printed PASS or FAIL): a valve opened in the PLC raises the bath level; driving the gantry into a bath wall sets `blockedX` and
+//! Checks (each printed PASS or FAIL): a valve opened in the PLC raises the tank level; driving the gantry into a tank wall sets `blockedX` and
 //! `contact` in the PLC (read back over OPC UA); backing off clears them.
 use ittoot_bridge::driver::{PlcDriver, Value};
 use ittoot_bridge::physics::Physics;
@@ -34,7 +34,7 @@ fn main() -> Result<(), String> {
     runner.prepare(&s, &design, 1);
     let keys = runner.input_keys(&s);
     println!("the physics reads {} PLC signals, for example {:?}", keys.len(), keys.iter().take(2).collect::<Vec<_>>());
-    // the PLC logic is stood in for by two writes: the fill valve of bath T2 is opened, the others are shut
+    // the PLC logic is stood in for by two writes: the fill valve of tank T2 is opened, the others are shut
     plc.write("Physics_01.fill_T2", Value::Real(100.0)).map_err(|e| e.to_string())?;
     plc.write("Physics_01.drain_T2", Value::Real(0.0)).map_err(|e| e.to_string())?;
     let axes = ["Gantry X".to_string(), "Gantry Y".to_string(), "Hoist Z".to_string()];
@@ -92,7 +92,7 @@ fn main() -> Result<(), String> {
     }
     let level_rise = level_now - level0.unwrap_or(level_now);
     let check = |name: &str, ok: bool| println!("{} {name}", if ok { "PASS" } else { "FAIL" });
-    check("the fill valve opened in the PLC raised the bath level", level_rise > 5.0);
+    check("the fill valve opened in the PLC raised the tank level", level_rise > 5.0);
     check("driving into the wall set blockedX in the PLC (read back over OPC UA)", max_blocked);
     check("the load touching the wall set contact in the PLC", max_contact);
     check("backing off cleared both flags in the PLC", last == (false, false));

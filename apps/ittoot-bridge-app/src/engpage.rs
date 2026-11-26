@@ -86,7 +86,7 @@ impl App {
                         ui.label(RichText::new(self.settings.job.title()).color(DIM));
                     });
                     if m.kind != ModelKind::Design {
-                        ui.label(RichText::new("Changes are made to a design: make this model from the design agent's rail and baths (Model page, New model), then come back.").color(WARN).size(13.0));
+                        ui.label(RichText::new("Changes are made to a design: make this model from the design agent's rail and tanks (Model page, New model), then come back.").color(WARN).size(13.0));
                     }
                 }
                 None => {
@@ -116,7 +116,7 @@ impl App {
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new("Area").strong());
-                ui.add_sized([420.0, 24.0], egui::TextEdit::singleline(&mut self.eng.req.area).hint_text("where: a bath, a station, an axis, a part, or a region of a drawing (sheet, x and y range)"));
+                ui.add_sized([420.0, 24.0], egui::TextEdit::singleline(&mut self.eng.req.area).hint_text("where: a tank, a station, an axis, a part, or a region of a drawing (sheet, x and y range)"));
                 egui::ComboBox::from_id_salt("eng-area").width(220.0).selected_text("pick a part").show_ui(ui, |ui| {
                     for c in &choices {
                         if ui.selectable_label(false, c).clicked() {
@@ -126,7 +126,7 @@ impl App {
                 });
             });
             ui.add_space(4.0);
-            multiline(ui, "What to change (the prompt)", "e.g. Make the bath at station 3 ... mm longer", &mut self.eng.req.what, 4);
+            multiline(ui, "What to change (the prompt)", "e.g. Make the tank at station 3 ... mm longer", &mut self.eng.req.what, 4);
             ui.add_space(4.0);
             ui.columns(2, |cols| {
                 multiline(&mut cols[0], "How", "how it should be done: method, sizes, what must stay as it is", &mut self.eng.req.how, 4);

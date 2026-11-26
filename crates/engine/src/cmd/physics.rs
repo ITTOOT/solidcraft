@@ -1,6 +1,6 @@
 //! Digital-twin physics inside the engine (`physics.load`, `physics.settings`, `physics.step`, `physics.reset`).
 //!
-//! The physics is the `ittoot-physics` crate: a hoist swinging on its rope and held by the walls it meets, baths rocking on their mounts, liquid
+//! The physics is the `ittoot-physics` crate: a hoist swinging on its rope and held by the walls it meets, tanks rocking on their mounts, liquid
 //! levels, cartons on belts, vessels filled by pumps. A run is started with a design from the design agent; each `physics.step` takes the PLC's
 //! commanded joint values and signals, works out what the machine does, and drives this document's own joints with it, so a controller needs one call
 //! per tick and no round trip for every joint. What the PLC should be told comes back in the reply. The run is not part of the document: it is not

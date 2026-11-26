@@ -8,7 +8,7 @@ use crate::App;
 use egui::{RichText, Ui};
 use ittoot_bridge::physics::{Physics, FIELDS, GROUPS, PRESETS};
 use crate::work::PushMsg;
-use ittoot_bridge::runner::{bath_id, Inputs, Runner, WriteVal};
+use ittoot_bridge::runner::{tank_id, Inputs, Runner, WriteVal};
 use serde_json::{json, Value};
 use std::time::Instant;
 
@@ -350,7 +350,7 @@ impl App {
                 ui.label(RichText::new(format!("{:.3} kg/m3", self.settings.physics.air_density())).color(INFO));
                 ui.end_row();
                 let rock = o.rock_deg.iter().map(|(n, a)| (n.clone(), a[0].abs().max(a[1].abs()))).fold((String::new(), 0.0_f64), |b, c| if c.1 > b.1 { c } else { b });
-                ui.label("Baths rocking");
+                ui.label("Tanks rocking");
                 if rock.1 > 0.02 {
                     ui.label(RichText::new(format!("{} by {:.2} deg", rock.0, rock.1)).color(WARN));
                 } else {
@@ -366,7 +366,7 @@ impl App {
             if let (Some(l), Some(s)) = (self.phys.levels.first(), &self.phys.supply) {
                 ui.add_space(4.0);
                 ui.label(RichText::new(format!(
-                    "Bath level {:.0} mm of {:.0} ({:.0} litres).  Supply: {:.2} m/s, {:.0} litres/min at full open, Reynolds {:.0}, friction {:.3}, {:.0} kPa lost in the run.",
+                    "Tank level {:.0} mm of {:.0} ({:.0} litres).  Supply: {:.2} m/s, {:.0} litres/min at full open, Reynolds {:.0}, friction {:.3}, {:.0} kPa lost in the run.",
                     l.mm,
                     l.max_mm,
                     l.litres(),
@@ -418,8 +418,8 @@ impl App {
                 if ui.button("Ask the design agent to make the walls this thick").on_hover_text("Fills in the Engineering page; you send it from there").clicked() {
                     let t = self.settings.physics.wall_thickness_mm;
                     self.eng.req = ittoot_bridge::engineering::ChangeRequest {
-                        area: "All baths (walls and floors)".into(),
-                        what: format!("Set the bath wall thickness to {t:.0} mm"),
+                        area: "All tanks (walls and floors)".into(),
+                        what: format!("Set the tank wall thickness to {t:.0} mm"),
                         how: "set the design's tank.wallMm; regenerate into the same project and output folder; keep every other size".into(),
                         why: "the physics page's wall thickness setting, so the drawn walls match what the load hits".into(),
                     };
@@ -438,11 +438,11 @@ impl App {
                 if ui.button("Copy the block's source").on_hover_text("The SCL source of Physics_01 for this design, to import into the PLC project").clicked()
                     && let Some((design, _)) = self.design_model.clone()
                 {
-                    let baths: Vec<String> = self.phys.world.as_ref().map(|w| w.baths.iter().map(|b| bath_id(&b.name)).collect()).unwrap_or_default();
-                    ui.ctx().copy_text(ittoot_bridge::physio::scl(&design, &baths));
+                    let liquids: Vec<String> = self.phys.world.as_ref().map(|w| w.liquids.iter().map(|b| tank_id(&b.name)).collect()).unwrap_or_default();
+                    ui.ctx().copy_text(ittoot_bridge::physio::scl(&design, &liquids));
                 }
             });
-            ui.label(RichText::new("Optional. The valves are read from the PLC (a bool is 0 or 1, a number above 1 a percentage); what the physics found is written to it as TRUE or FALSE. `{id}` in a valve key is the bath's id (T2, T3 ...). The PLC project needs points to match.").color(DIM).size(13.0));
+            ui.label(RichText::new("Optional. The valves are read from the PLC (a bool is 0 or 1, a number above 1 a percentage); what the physics found is written to it as TRUE or FALSE. `{id}` in a valve key is the tank's id (T2, T3 ...). The PLC project needs points to match.").color(DIM).size(13.0));
             egui::Grid::new("phys-plc").num_columns(3).spacing([14.0, 5.0]).show(ui, |ui| {
                 let mut row = |ui: &mut Ui, label: &str, help: &str, v: &mut String| {
                     ui.label(label).on_hover_text(help);
@@ -462,8 +462,8 @@ impl App {
                     ui.end_row();
                 };
                 let p = &mut self.settings.physics.plc;
-                row(ui, "Fill valve (read)", "How far the fill valve of the bath is open", &mut p.fill_key);
-                row(ui, "Drain valve (read)", "How far the drain valve of the bath is open", &mut p.drain_key);
+                row(ui, "Fill valve (read)", "How far the fill valve of the tank is open", &mut p.fill_key);
+                row(ui, "Drain valve (read)", "How far the drain valve of the tank is open", &mut p.drain_key);
                 row(ui, "X stopped by a solid (write)", "TRUE while the X axis is held back by something the load has met", &mut p.blocked_x_key);
                 row(ui, "Y stopped by a solid (write)", "TRUE while the Y axis is held back", &mut p.blocked_y_key);
                 row(ui, "Hoist stopped by a solid (write)", "TRUE while the hoist is held back: the jig is on a rim, a floor or a wall", &mut p.blocked_hoist_key);
@@ -510,7 +510,7 @@ mod tests {
         assert_eq!(sway_names("Transporter A Z").0, "Transporter A Sway Rx");
         assert_eq!(slack_name("Hoist Z"), "Rope slack");
         assert_eq!(slack_name("Transporter B Z"), "Transporter B rope slack");
-        assert_eq!(bath_id("Tank T2"), "T2");
+        assert_eq!(tank_id("Tank T2"), "T2");
     }
 
     /// An app with a design of this application, physics on and Solidcraft answering with these joints.

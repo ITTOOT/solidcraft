@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct ChangeRequest {
-    /// Where: a part, a bath, a station, an axis, or a region of a drawing.
+    /// Where: a part, a tank, a station, an axis, or a region of a drawing.
     pub area: String,
     /// What to change.
     pub what: String,
@@ -33,9 +33,9 @@ pub struct LogEntry {
 
 /// Starting points for a request: (tool, area, what, how, why). The operator fills in the numbers and names.
 pub const TOOLS: &[(&str, &str, &str, &str, &str)] = &[
-    ("Move a station", "Station N", "Move station N by ... mm along the line", "keep the pitch of the other stations; move its bath, sensors and pipework with it", "..."),
-    ("Resize a bath", "Station N bath", "Make the bath ... mm long x ... mm wide x ... mm high", "keep the jig clear of the walls by at least 100 mm each side", "..."),
-    ("Resize the jig", "Jig", "Change the jig to ... mm wide x ... mm high, ... kg", "check the hoist stroke and the bath size still fit it", "..."),
+    ("Move a station", "Station N", "Move station N by ... mm along the line", "keep the pitch of the other stations; move its tank, sensors and pipework with it", "..."),
+    ("Resize a tank", "Station N tank", "Make the tank ... mm long x ... mm wide x ... mm high", "keep the jig clear of the walls by at least 100 mm each side", "..."),
+    ("Resize the jig", "Jig", "Change the jig to ... mm wide x ... mm high, ... kg", "check the hoist stroke and the tank size still fit it", "..."),
     ("Add or change a sensor", "Station N", "Add a ... sensor at ...", "wired to the remote I/O box of that station", "..."),
     ("Change the speeds", "Transporter", "Change the travel speed to ... mm/s and the hoist speed to ... mm/s", "recalculate the over-travel distances and the light curtain distance", "..."),
     ("Change the guarding", "Load area", "Change the guarding of the load area to ...", "show the new protective distance with its working", "..."),
@@ -43,7 +43,7 @@ pub const TOOLS: &[(&str, &str, &str, &str, &str)] = &[
     ("Change the panel", "Main panel", "Change the panel to ...", "resize from the I/O count, keep 20 % spare", "..."),
     ("Change what drives a joint", "Gantry X", "Drive this joint from the signal ...", "give the scale and offset if the units differ", "..."),
     ("Change the hoist line", "Hoist", "Change the hoist line to ... (wire rope, chain or none)", "set the design's hoist.line; keep the hook, the hoist stroke and the sway joints", "..."),
-    ("Change the bath mounts", "Station N bath", "Change the bath mounts to ... (rocking or fixed)", "set the design's tank.mount; rocking baths get two joints at their base", "..."),
+    ("Change the tank mounts", "Station N tank", "Change the tank mounts to ... (rocking or fixed)", "set the design's tank.mount; rocking tanks get two joints at their base", "..."),
     ("Free request", "", "", "", ""),
 ];
 
@@ -112,7 +112,7 @@ mod tests {
     use super::*;
 
     fn req() -> ChangeRequest {
-        ChangeRequest { area: "Station 3 bath".into(), what: "make it 1500 mm high".into(), how: "keep the jig 100 mm clear".into(), why: "a longer jig".into() }
+        ChangeRequest { area: "Station 3 tank".into(), what: "make it 1500 mm high".into(), how: "keep the jig 100 mm clear".into(), why: "a longer jig".into() }
     }
 
     #[test]
@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn the_prompt_names_the_area_what_how_why_and_the_way_to_record_it() {
         let p = compose_prompt(&req(), "Plating Line J-1", "plating_line", "Rail", "C:\\x\\Design\\Rail");
-        for must in ["CHANGE REQUEST for Plating Line J-1", "AREA: Station 3 bath", "WHAT: make it 1500 mm high", "HOW: keep the jig 100 mm clear", "WHY: a longer jig", "project 'Rail'", "change_log_add", "design_spec"] {
+        for must in ["CHANGE REQUEST for Plating Line J-1", "AREA: Station 3 tank", "WHAT: make it 1500 mm high", "HOW: keep the jig 100 mm clear", "WHY: a longer jig", "project 'Rail'", "change_log_add", "design_spec"] {
             assert!(p.contains(must), "{must}\n{p}");
         }
         assert!(compose_prompt(&ChangeRequest { area: "a".into(), what: "b".into(), ..Default::default() }, "T", "x", "p", "o").contains("HOW: (not given)"));

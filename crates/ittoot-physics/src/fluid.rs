@@ -1,6 +1,6 @@
-//! Flow and pressure: what a pump, a pipe run, a fill valve and a drain do to the liquid in a bath. All of it is
+//! Flow and pressure: what a pump, a pipe run, a fill valve and a drain do to the liquid in a tank. All of it is
 //! textbook hydraulics with every number a setting: the Darcy-Weisbach pressure drop with the Swamee-Jain friction factor,
-//! the fittings loss factors, the drain by the law of Torricelli, and the bath level moving with what comes in and goes out.
+//! the fittings loss factors, the drain by the law of Torricelli, and the tank level moving with what comes in and goes out.
 //!
 //! Units: SI for the calculation (m, kg, s, Pa); the settings use mm and kPa where a person thinks in them.
 
@@ -136,7 +136,7 @@ pub fn drain_flow(f: &Flow, h_m: f64, g: f64) -> f64 {
     f.drain_cd * a * (2.0 * g.max(0.0) * h_m.max(0.0)).sqrt()
 }
 
-/// A bath's level (mm above its floor) moving with the fill valve and the drain.
+/// A tank's level (mm above its floor) moving with the fill valve and the drain.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Level {
     pub mm: f64,
@@ -146,7 +146,7 @@ pub struct Level {
 }
 
 impl Level {
-    /// Advance `dt` seconds; returns (inflow, outflow) in m3/s. The bath cannot fill past its brim or drain below its floor.
+    /// Advance `dt` seconds; returns (inflow, outflow) in m3/s. The tank cannot fill past its brim or drain below its floor.
     pub fn step(&mut self, dt: f64, f: &Flow, sup: &Supply, g: f64) -> (f64, f64) {
         let q_in = sup.flow * f.inlet_open.clamp(0.0, 1.0);
         let mut left = dt.max(0.0);
@@ -196,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn the_drain_follows_torricelli_and_the_bath_cannot_go_below_its_floor() {
+    fn the_drain_follows_torricelli_and_the_tank_cannot_go_below_its_floor() {
         let mut f = Flow { drain_open: 1.0, drain_dn_mm: 50.0, drain_cd: 0.62, ..Flow::default() };
         let sup = supply(&f, 1000.0, 0.001);
         let q = drain_flow(&f, 1.1, 9.81);

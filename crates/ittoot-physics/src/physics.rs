@@ -7,11 +7,11 @@
 //!   a carrier up and the load lags and then swings, brake it and the load swings on. Mass, damping and the gravity pull
 //!   change it; the sway gain exaggerates or hides it in the picture only.
 //! - **Atmosphere.** Air density from pressure and temperature, a wind, and the drag of the moving load on the air.
-//! - **Liquid.** In a bath the load is lighter (buoyancy), drags the liquid (density, viscosity) and drags some of it along
+//! - **Liquid.** In a tank the load is lighter (buoyancy), drags the liquid (density, viscosity) and drags some of it along
 //!   (added mass), so it swings slower and settles faster.
 //! - **Solids.** The jig cannot pass through the walls, floors, columns or fences of the design. A carrier that drives the load
 //!   into one is stopped (blocked, reported), and a load that swings into one bounces back by the restitution. The thickness
-//!   of the bath walls is a setting.
+//!   of the tank walls is a setting.
 //! - **Flow and pressure** are in `fluid.rs`.
 //!
 //! Units: the design's millimetres for geometry, SI (kg, m, s, N, Pa) for the physics.
@@ -31,8 +31,8 @@ const SUBSTEP: f64 = 0.004;
 const SWAY_JOINT_LIMIT: f64 = std::f64::consts::FRAC_PI_4;
 
 /// Which PLC signals the physics reads and writes. All are optional: an empty key is off. The PLC project has to have the matching points
-/// (a physics-fed sensor for each output; the valve outputs of the fill and drain). `{id}` in a valve key stands for the bath's id (T2, T3 ...),
-/// so one setting serves every bath.
+/// (a physics-fed sensor for each output; the valve outputs of the fill and drain). `{id}` in a valve key stands for the tank's id (T2, T3 ...),
+/// so one setting serves every tank.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PlcLinks {
@@ -76,7 +76,7 @@ pub struct Physics {
     pub air_temp_c: f64,
     pub wind_x: f64,
     pub wind_y: f64,
-    // ---- the liquid in the baths
+    // ---- the liquid in the tanks
     pub liquid_density: f64,
     pub liquid_viscosity_mpas: f64,
     pub added_mass: f64,
@@ -99,7 +99,7 @@ pub struct Physics {
     pub contact_margin_mm: f64,
     /// Parts that are solid to the load: a comma-separated list of name fragments.
     pub solid_parts: String,
-    // ---- the baths rock when hit
+    // ---- the tanks rock when hit
     pub rock: bool,
     pub tank_mass: f64,
     pub mount_stiffness_knm: f64,
@@ -174,7 +174,7 @@ const fn fld(key: &'static str, group: &'static str, label: &'static str, unit: 
     Field { key, group, label, unit, min, max, step, help }
 }
 
-pub const GROUPS: &[&str] = &["Gravity and atmosphere", "Liquid", "The load", "Sway", "Solids and collisions", "Baths rock", "Flow and pressure", "Cartons on belts", "Process plant"];
+pub const GROUPS: &[&str] = &["Gravity and atmosphere", "Liquid", "The load", "Sway", "Solids and collisions", "Tanks rock", "Flow and pressure", "Cartons on belts", "Process plant"];
 
 pub const FIELDS: &[Field] = &[
     fld("gravity", "Gravity and atmosphere", "Gravity", "m/s2", 0.0, 30.0, 0.01, "The pull on everything: 9.81 on Earth, 1.62 on the Moon, 0 for none. It sets the swing speed and the weight of the load."),
@@ -184,24 +184,24 @@ pub const FIELDS: &[Field] = &[
     fld("wind_y", "Gravity and atmosphere", "Air flow across the line", "m/s", -20.0, 20.0, 0.1, "A steady draught across the rail."),
     fld("liquid_density", "Liquid", "Liquid density", "kg/m3", 600.0, 2000.0, 1.0, "Water 1000, plating solutions 1050 to 1300. Heavier liquid lifts the jig more and drags more."),
     fld("liquid_viscosity_mpas", "Liquid", "Liquid viscosity", "mPa s", 0.1, 500.0, 0.1, "Water 1.0 at 20 C. A thicker liquid settles the swing faster."),
-    fld("added_mass", "Liquid", "Added mass", "x", 0.0, 2.0, 0.05, "How much liquid the immersed jig drags along with it, as a fraction of the water in its outline. More makes the swing slower in the bath."),
+    fld("added_mass", "Liquid", "Added mass", "x", 0.0, 2.0, 0.05, "How much liquid the immersed jig drags along with it, as a fraction of the water in its outline. More makes the swing slower in the tank."),
     fld("load_mass", "The load", "Jig and product mass", "kg", 1.0, 5000.0, 1.0, "Everything on the hook. The design's jig weight is the start value."),
     fld("drag_coeff", "The load", "Drag coefficient", "", 0.1, 2.5, 0.01, "Shape of the load to the flow: 1.1 for a flat jig, 0.5 for a streamlined one, 2 for a flat plate face-on to a gust."),
-    fld("solidity", "The load", "Solid fraction of the outline", "", 0.01, 1.0, 0.01, "How much of the jig's outline is metal and product rather than gaps. It sets the buoyancy in a bath."),
+    fld("solidity", "The load", "Solid fraction of the outline", "", 0.01, 1.0, 0.01, "How much of the jig's outline is metal and product rather than gaps. It sets the buoyancy in a tank."),
     fld("pivot_friction", "The load", "Hanger friction", "N m s/rad", 0.0, 500.0, 0.5, "Friction in the rope and the hanger. More stops the swing sooner."),
     fld("rope_extra_mm", "The load", "Extra rope length", "mm", 0.0, 3000.0, 10.0, "Rope between the trolley and the hook beyond what the model shows. Longer swings slower."),
     fld("sway_gain", "Sway", "Sway gain", "x", 0.0, 5.0, 0.05, "1 is the real swing. More exaggerates it to see it, 0 hides it. What is drawn is what hits the walls, so an exaggerated swing hits them sooner."),
     fld("swing_limit_deg", "Sway", "Largest swing", "deg", 1.0, 80.0, 0.5, "The hanger stops here, as a rope or a stop would."),
     fld("accel_smoothing_s", "Sway", "Motion smoothing", "s", 0.0, 1.0, 0.01, "The PLC's positions arrive a few times a second: they are smoothed over this time before the acceleration is worked out."),
-    fld("wall_thickness_mm", "Solids and collisions", "Bath wall thickness", "mm", 0.0, 300.0, 1.0, "0 keeps the design's walls. A thicker wall is solid further in, so the jig stops sooner."),
+    fld("wall_thickness_mm", "Solids and collisions", "Tank wall thickness", "mm", 0.0, 300.0, 1.0, "0 keeps the design's walls. A thicker wall is solid further in, so the jig stops sooner."),
     fld("restitution", "Solids and collisions", "Bounce", "", 0.0, 1.0, 0.01, "How much of the speed a swinging load keeps when it hits a wall: 0 dead stop, 1 perfect bounce."),
     fld("contact_friction", "Solids and collisions", "Contact friction", "", 0.0, 1.5, 0.01, "How much of the sliding speed along a wall is lost in a hit."),
     fld("contact_margin_mm", "Solids and collisions", "Contact margin", "mm", 0.0, 50.0, 0.5, "The gap kept to a solid, so the load stops just short of it."),
-    fld("tank_mass", "Baths rock", "Empty bath mass", "kg", 20.0, 5000.0, 10.0, "The bath and what is fixed to it, without the liquid. The liquid in it is added from its level."),
-    fld("mount_stiffness_knm", "Baths rock", "Mount stiffness", "kN m/rad", 1.0, 400.0, 1.0, "How hard the mounts resist tilting. Softer mounts let a hit rock the bath further and for longer."),
-    fld("rock_damping", "Baths rock", "Mount damping", "", 0.0, 1.5, 0.01, "How quickly the rocking dies away: 0 never, 1 settles without a swing back."),
-    fld("axis_stiffness", "Baths rock", "Drive stiffness", "N/mm", 0.0, 500.0, 1.0, "How hard the PLC's axis pushes for each millimetre it is held back by a solid."),
-    fld("axis_force_max", "Baths rock", "Drive force limit", "N", 0.0, 50000.0, 50.0, "The most the axis can push with, the motor's limit. It leans the bath it is pushed against."),
+    fld("tank_mass", "Tanks rock", "Empty tank mass", "kg", 20.0, 5000.0, 10.0, "The tank and what is fixed to it, without the liquid. The liquid in it is added from its level."),
+    fld("mount_stiffness_knm", "Tanks rock", "Mount stiffness", "kN m/rad", 1.0, 400.0, 1.0, "How hard the mounts resist tilting. Softer mounts let a hit rock the tank further and for longer."),
+    fld("rock_damping", "Tanks rock", "Mount damping", "", 0.0, 1.5, 0.01, "How quickly the rocking dies away: 0 never, 1 settles without a swing back."),
+    fld("axis_stiffness", "Tanks rock", "Drive stiffness", "N/mm", 0.0, 500.0, 1.0, "How hard the PLC's axis pushes for each millimetre it is held back by a solid."),
+    fld("axis_force_max", "Tanks rock", "Drive force limit", "N", 0.0, 50000.0, 50.0, "The most the axis can push with, the motor's limit. It leans the tank it is pushed against."),
     fld("loads.on", "Cartons on belts", "Cartons on", "0/1", 0.0, 1.0, 1.0, "1 runs the cartons on the belts of a conveyor line or a robot cell; 0 leaves them parked."),
     fld("loads.traction", "Cartons on belts", "Grip on the belt", "", 0.02, 1.5, 0.01, "Friction between carton and belt: a carton accelerates with this times gravity and slides this far when the belt stops. Wet or oily belts grip less."),
     fld("loads.restitution", "Cartons on belts", "Bounce", "", 0.0, 1.0, 0.01, "How much speed a carton keeps when it hits another or a stop plate."),
@@ -222,13 +222,13 @@ pub const FIELDS: &[Field] = &[
     fld("plant.dry_pct", "Process plant", "Suction lost below", "%", 0.0, 20.0, 0.5, "A pump commanded to run with its source below this fill is running dry and moves nothing."),
     fld("plant.high_pct", "Process plant", "High level switch", "%", 50.0, 100.0, 1.0, "The fill at which the high level switch is made."),
     fld("plant.low_pct", "Process plant", "Low level switch", "%", 0.0, 50.0, 1.0, "The fill at which the low level switch is made."),
-    fld("flow.pipe_dn_mm", "Flow and pressure", "Pipe bore", "mm", 5.0, 400.0, 1.0, "Inside diameter of the pipework from the pump to the bath."),
-    fld("flow.pipe_length_m", "Flow and pressure", "Pipe length", "m", 0.5, 500.0, 0.5, "Length of the run from the pump to the bath."),
+    fld("flow.pipe_dn_mm", "Flow and pressure", "Pipe bore", "mm", 5.0, 400.0, 1.0, "Inside diameter of the pipework from the pump to the tank."),
+    fld("flow.pipe_length_m", "Flow and pressure", "Pipe length", "m", 0.5, 500.0, 0.5, "Length of the run from the pump to the tank."),
     fld("flow.roughness_mm", "Flow and pressure", "Pipe roughness", "mm", 0.0, 3.0, 0.001, "Plastic 0.0015, steel 0.045, old cast iron 0.25."),
     fld("flow.fittings_k", "Flow and pressure", "Fittings loss", "K", 0.0, 100.0, 0.5, "Sum of the loss factors of the bends, valves and tees on the run."),
     fld("flow.pump_pressure_kpa", "Flow and pressure", "Pump pressure", "kPa", 0.0, 1500.0, 1.0, "Pressure the pump gives at the start of the run."),
     fld("flow.inlet_open", "Flow and pressure", "Fill valve open", "", 0.0, 1.0, 0.01, "How far the fill valve is open (the PLC's valve sets it)."),
-    fld("flow.drain_dn_mm", "Flow and pressure", "Drain bore", "mm", 5.0, 300.0, 1.0, "Bore of the drain outlet of the bath."),
+    fld("flow.drain_dn_mm", "Flow and pressure", "Drain bore", "mm", 5.0, 300.0, 1.0, "Bore of the drain outlet of the tank."),
     fld("flow.drain_open", "Flow and pressure", "Drain valve open", "", 0.0, 1.0, 0.01, "How far the drain valve is open (the PLC's valve sets it)."),
     fld("flow.drain_cd", "Flow and pressure", "Drain discharge coefficient", "", 0.3, 1.0, 0.01, "How well the drain passes liquid: 0.6 for a sharp outlet, 0.9 for a smooth one."),
 ];
@@ -329,8 +329,8 @@ impl Physics {
                 p.restitution = 0.0;
             }
             "Air only (no collisions)" => p.collisions = false,
-            "Bolted-down baths" => p.rock = false,
-            "Loose baths" => {
+            "Bolted-down tanks" => p.rock = false,
+            "Loose tanks" => {
                 p.mount_stiffness_knm = 12.0;
                 p.tank_mass = 150.0;
             }
@@ -340,7 +340,7 @@ impl Physics {
     }
 }
 
-pub const PRESETS: &[&str] = &["Earth", "Moon", "Weightless", "Exaggerated sway", "Heavy liquid", "Rigid (no sway, no bounce)", "Air only (no collisions)", "Bolted-down baths", "Loose baths"];
+pub const PRESETS: &[&str] = &["Earth", "Moon", "Weightless", "Exaggerated sway", "Heavy liquid", "Rigid (no sway, no bounce)", "Air only (no collisions)", "Bolted-down tanks", "Loose tanks"];
 
 // ------------------------------------------------------------------------------------------------ the world
 
@@ -449,11 +449,11 @@ fn aabb_of(o: &Obb) -> Aabb {
 pub struct Solid {
     pub name: String,
     pub bounds: Aabb,
-    /// The bath this wall belongs to, when baths rock.
+    /// The tank this wall belongs to, when tanks rock.
     pub tank: Option<usize>,
 }
 
-/// A bath on its mounts: it can tilt about X and about Y at the middle of its base.
+/// A tank on its mounts: it can tilt about X and about Y at the middle of its base.
 #[derive(Clone, Debug)]
 pub struct Tank {
     pub name: String,
@@ -467,9 +467,9 @@ pub struct Tank {
     pub omega: [f64; 2],
 }
 
-/// A bath's liquid: the footprint inside its walls and the height of the surface.
+/// A tank's liquid: the footprint inside its walls and the height of the surface.
 #[derive(Clone, Debug)]
-pub struct Bath {
+pub struct TankLiquid {
     pub name: String,
     /// The level the design drew (mm above the floor): the level joint's zero.
     pub level0: f64,
@@ -542,7 +542,7 @@ pub struct Outputs {
     pub drag_n: f64,
     pub rope_m: f64,
     pub period_s: f64,
-    /// How far each bath is tilted now (degrees about X and about Y), by bath name.
+    /// How far each tank is tilted now (degrees about X and about Y), by tank name.
     pub rock_deg: Vec<(String, [f64; 2])>,
     /// The force the stopped carrier pushes the solid with (N).
     pub push_n: f64,
@@ -563,7 +563,7 @@ pub struct World {
     pub s: Physics,
     pub rig: Rig,
     pub solids: Vec<Solid>,
-    pub baths: Vec<Bath>,
+    pub liquids: Vec<TankLiquid>,
     pub tanks: Vec<Tank>,
     pub st: State,
     /// Jig outline sizes (m): width along X, thickness along Y, height.
@@ -612,7 +612,7 @@ fn thickened(b: &Aabb, tank: &Aabb, t: f64) -> Aabb {
 
 impl World {
     /// Build the world from a design agent's `design.json`. The bodies of the hook part swing; the bodies the settings name are
-    /// solid; each bath is a tank part with its liquid depth, and rocks when the design gave it mounts (joints "<tank> Rock Rx/Ry").
+    /// solid; each tank is a tank part with its liquid depth, and rocks when the design gave it mounts (joints "<tank> Rock Rx/Ry").
     pub fn from_design(design: &Json, s: &Physics) -> Result<World, String> {
         let parts = design["geometry"]["parts"].as_array().ok_or("the design has no geometry")?;
         let joints = design["geometry"]["joints"].as_array().ok_or("the design has no joints")?;
@@ -627,13 +627,13 @@ impl World {
         let limits = [(num(&jx["limits"][0]), num(&jx["limits"][1])), (num(&jy["limits"][0]), num(&jy["limits"][1])), (num(&jz["limits"][0]), num(&jz["limits"][1]))];
         let solid_words: Vec<String> = s.solid_parts.split(',').map(|w| w.trim().to_lowercase()).filter(|w| !w.is_empty()).collect();
         let mut solids = Vec::new();
-        let mut baths = Vec::new();
+        let mut liquids = Vec::new();
         let mut tanks: Vec<Tank> = Vec::new();
         let level = num(&design["spec"]["tank"]["liquidDepthMm"]);
         for p in parts {
             let Some(name) = p["name"].as_str() else { continue };
             let is_tank = name.starts_with("Tank ") && !name.contains(" mount");
-            // a bath on mounts is not grounded; everything else that moves with the machine is not solid
+            // a tank on mounts is not grounded; everything else that moves with the machine is not solid
             if name.contains(" liquid") {
                 continue;
             }
@@ -675,7 +675,7 @@ impl World {
                 let wall_t = if wall_t.is_finite() && wall_t < 1e6 { wall_t } else { 0.0 };
                 let (dx, dy) = (tank.max[0] - tank.min[0] - 2.0 * wall_t, tank.max[1] - tank.min[1] - 2.0 * wall_t);
                 let area = (dx * dy / 1.0e6).max(0.01);
-                baths.push(Bath {
+                liquids.push(TankLiquid {
                     name: name.to_string(),
                     level0: floor.1.min[2] + level - floor.1.max[2],
                     bounds: tank.clone(),
@@ -697,31 +697,31 @@ impl World {
                 p.load_mass = kg;
             }
         }
-        Ok(World { s: p, rig: Rig { pivot, bodies, jig: jig_b, axes, limits }, solids, baths, tanks, st: State::default(), jig_m })
+        Ok(World { s: p, rig: Rig { pivot, bodies, jig: jig_b, axes, limits }, solids, liquids, tanks, st: State::default(), jig_m })
     }
 
-    /// Set the liquid level (mm above the bath floor) of every bath: the baths of a line are filled alike.
+    /// Set the liquid level (mm above the tank floor) of every tank: the tanks of a line are filled alike.
     pub fn set_level(&mut self, mm: f64) {
-        for b in &mut self.baths {
+        for b in &mut self.liquids {
             b.level_z = b.base_z + mm.clamp(0.0, b.brim_mm);
         }
     }
 
-    /// Set each bath's level (mm above its floor), in the order of `baths`.
+    /// Set each tank's level (mm above its floor), in the order of `tanks`.
     pub fn set_levels(&mut self, mm: &[f64]) {
-        for (b, v) in self.baths.iter_mut().zip(mm) {
+        for (b, v) in self.liquids.iter_mut().zip(mm) {
             b.level_z = b.base_z + v.clamp(0.0, b.brim_mm);
         }
     }
 
-    /// Every bath's level (mm above its floor), brim and plan area, in the order of `baths`.
-    pub fn bath_levels(&self) -> Vec<(f64, f64, f64)> {
-        self.baths.iter().map(|b| (b.level_z - b.base_z, b.brim_mm, b.area_m2)).collect()
+    /// Every tank's level (mm above its floor), brim and plan area, in the order of `tanks`.
+    pub fn tank_levels(&self) -> Vec<(f64, f64, f64)> {
+        self.liquids.iter().map(|b| (b.level_z - b.base_z, b.brim_mm, b.area_m2)).collect()
     }
 
-    /// The first bath's level (mm above its floor), its brim and its plan area, for the page's fill and drain model.
-    pub fn bath_level(&self) -> Option<(f64, f64, f64)> {
-        self.baths.first().map(|b| (b.level_z - b.base_z, b.brim_mm, b.area_m2))
+    /// The first tank's level (mm above its floor), its brim and its plan area, for the page's fill and drain model.
+    pub fn tank_level(&self) -> Option<(f64, f64, f64)> {
+        self.liquids.first().map(|b| (b.level_z - b.base_z, b.brim_mm, b.area_m2))
     }
 
     /// Change a setting live. Walls are rebuilt only by `from_design`: the page asks for that when a wall setting changes.
@@ -769,7 +769,7 @@ impl World {
         aabb_of(&self.load_obb(body, c, phi))
     }
 
-    /// A solid of the design as it is now: a bath wall is tilted with its bath.
+    /// A solid of the design as it is now: a tank wall is tilted with its tank.
     fn solid_obb(&self, s: &Solid) -> Obb {
         let o = obb_of(&s.bounds);
         match s.tank.and_then(|i| self.tanks.get(i)) {
@@ -862,11 +862,11 @@ impl World {
         [0, 1, 2].map(|k| c[k].clamp(self.rig.limits[k].0.min(self.rig.limits[k].1), self.rig.limits[k].0.max(self.rig.limits[k].1)))
     }
 
-    /// How much of the jig is in a bath's liquid, with the carrier at `c` and the load swung.
+    /// How much of the jig is in a tank's liquid, with the carrier at `c` and the load swung.
     fn immersion(&self, c: [f64; 3], phi: [f64; 2]) -> f64 {
         let j = self.load_box(&self.rig.jig, c, phi);
         let mut best: f64 = 0.0;
-        for b in &self.baths {
+        for b in &self.liquids {
             let inside = j.min[0] >= b.bounds.min[0] - 1.0 && j.max[0] <= b.bounds.max[0] + 1.0 && j.min[1] >= b.bounds.min[1] - 1.0 && j.max[1] <= b.bounds.max[1] + 1.0;
             if !inside {
                 continue;
@@ -879,7 +879,7 @@ impl World {
         best
     }
 
-    /// An impulse `j` (N s) along `normal` (from the load to the bath) at `point` tilts the bath it hits.
+    /// An impulse `j` (N s) along `normal` (from the load to the tank) at `point` tilts the tank it hits.
     fn kick(&mut self, hit: &Hit, j: f64) {
         let Some(ti) = hit.tank else { return };
         if !self.s.rock || j <= 0.0 {
@@ -897,10 +897,10 @@ impl World {
         t.omega[1] += ang[1] / i_y;
     }
 
-    /// The bath's mass (kg) and its inertia about X and about Y at the middle of its base (kg m2).
+    /// The tank's mass (kg) and its inertia about X and about Y at the middle of its base (kg m2).
     fn tank_inertia(&self, ti: usize) -> (f64, f64, f64) {
         let t = &self.tanks[ti];
-        let level = self.baths.get(ti).map(|b| (b.level_z - b.base_z).max(0.0) / 1000.0).unwrap_or(0.0);
+        let level = self.liquids.get(ti).map(|b| (b.level_z - b.base_z).max(0.0) / 1000.0).unwrap_or(0.0);
         let m_liq = self.s.liquid_density * level * t.area_m2;
         let m = self.s.tank_mass + m_liq;
         let h = t.height_mm / 1000.0;
@@ -909,7 +909,7 @@ impl World {
         (m_liq, i_x.max(1.0), i_y.max(1.0))
     }
 
-    /// Let the baths settle on their mounts: a spring and a damper, less what gravity takes off the stiffness of a tall tank.
+    /// Let the tanks settle on their mounts: a spring and a damper, less what gravity takes off the stiffness of a tall tank.
     fn rock(&mut self, h: f64, torque: &[[f64; 2]]) {
         let n = self.tanks.len();
         for ti in 0..n {
@@ -1107,12 +1107,12 @@ impl World {
                 }
                 contact = Some(hit.name);
             }
-            // the baths settle on their mounts (and move toward the load while it is pressed against them)
+            // the tanks settle on their mounts (and move toward the load while it is pressed against them)
             let tilt_before: Vec<[f64; 2]> = self.tanks.iter().map(|t| t.theta).collect();
             if self.s.rock && !self.tanks.is_empty() {
                 self.rock(h, &torque);
             }
-            // the safety net: a bath that tilted into the load, or anything left over, is pushed apart by moving the carrier back
+            // the safety net: a tank that tilted into the load, or anything left over, is pushed apart by moving the carrier back
             for _ in 0..6 {
                 let c = self.st.carrier;
                 let Some(hit) = self.hit(c, self.st.phi) else { break };
@@ -1142,7 +1142,7 @@ impl World {
                     break;
                 }
             }
-            // a load wedged where the carrier cannot back off (the bath leaning into it from the other side too) holds the bath: it stops tilting
+            // a load wedged where the carrier cannot back off (the tank leaning into it from the other side too) holds the tank: it stops tilting
             if self.hit(self.st.carrier, self.st.phi).is_some_and(|h| h.depth > 1e-6) {
                 for (t, before) in self.tanks.iter_mut().zip(&tilt_before) {
                     t.theta = *before;

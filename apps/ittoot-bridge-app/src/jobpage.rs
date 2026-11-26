@@ -1,6 +1,6 @@
 //! The job, the PLC project and the model project: which job we are working on (its number titles every document and
 //! names the folder the files go in), which PLC project is read, and which model project is shown, with a way to make a
-//! new model from the gantry template, from the design agent's rail and baths, or from scratch.
+//! new model from the gantry template, from the design agent's rail and tanks, or from scratch.
 
 use crate::theme::*;
 use crate::widgets::*;
@@ -86,7 +86,7 @@ impl App {
         if name.is_empty() {
             name = match kind {
                 ModelKind::Template => "Gantry",
-                ModelKind::Design => "Rail and baths",
+                ModelKind::Design => "Rail and tanks",
                 ModelKind::Scratch => "Model",
             }
             .to_string();
@@ -219,7 +219,7 @@ impl App {
                 if ui.button("from the gantry template").on_hover_text("Sized from the PLC's data: a bridge, trolley and hoist with the PLC's axes bound to the joints").clicked() {
                     act = Act::New(ModelKind::Template);
                 }
-                if ui.button("from the design agent's rail and baths").on_hover_text("One bath for each PLC station on the design agent's plating-line model; the transport runs along its rail. The design agent must be running.").clicked() {
+                if ui.button("from the design agent's rail and tanks").on_hover_text("One tank for each PLC station on the design agent's plating-line model; the transport runs along its rail. The design agent must be running.").clicked() {
                     act = Act::New(ModelKind::Design);
                 }
                 if ui.button("from scratch").on_hover_text("An empty model: draw it in Solidcraft, then tie each joint to a PLC signal below").clicked() {

@@ -104,7 +104,7 @@ pub enum ModelKind {
     /// The gantry-and-hoist template, sized from the PLC data.
     #[default]
     Template,
-    /// The design agent's model (its rail, baths, pipes...) with the PLC's transport running on it.
+    /// The design agent's model (its rail, tanks, pipes...) with the PLC's transport running on it.
     Design,
     /// Made from nothing in Solidcraft; the operator ties joints to PLC signals by hand.
     Scratch,
@@ -114,7 +114,7 @@ impl ModelKind {
     pub fn label(self) -> &'static str {
         match self {
             ModelKind::Template => "gantry template",
-            ModelKind::Design => "design agent's rail and baths",
+            ModelKind::Design => "design agent's rail and tanks",
             ModelKind::Scratch => "from scratch",
         }
     }

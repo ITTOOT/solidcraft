@@ -1,7 +1,7 @@
 use super::*;
 use serde_json::json;
 
-/// The shape of the design agent's plating rail: one transporter, two baths (T2 at x 1500, T3 at x 3000), a 800 x 200 x 1200 jig.
+/// The shape of the design agent's plating rail: one transporter, two tanks (T2 at x 1500, T3 at x 3000), a 800 x 200 x 1200 jig.
 pub(crate) fn design() -> Json {
     let tank = |name: &str, x0: f64| {
         json!({"name": name, "grounded": false, "bodies": [
@@ -149,21 +149,21 @@ fn in_the_liquid_the_load_is_lighter_and_drags_liquid_with_it() {
         w.step(0.01, [1500.0, 0.0, 1000.0])
     };
     assert!((o.immersion - 0.54).abs() < 0.02, "{}", o.immersion);
-    let in_bath = period(&mut w, [1500.0, 0.0, 1000.0], 0.04);
+    let in_tank = period(&mut w, [1500.0, 0.0, 1000.0], 0.04);
     // a longer rope alone would give sqrt(2.0/1.05) = 1.38 times; the liquid adds to it
-    assert!(in_bath > in_air * 1.38, "{in_air} {in_bath}");
-    // the same bath without the added mass is quicker
+    assert!(in_tank > in_air * 1.38, "{in_air} {in_tank}");
+    // the same tank without the added mass is quicker
     let mut dry = world(&Physics { added_mass: 0.0, ..s.clone() });
     let without = period(&mut dry, [1500.0, 0.0, 1000.0], 0.04);
-    assert!(without < in_bath, "{without} {in_bath}");
-    // outside any bath nothing is immersed
+    assert!(without < in_tank, "{without} {in_tank}");
+    // outside any tank nothing is immersed
     w.reset();
     assert_eq!(w.step(0.01, [0.0, 0.0, 1000.0]).immersion, 0.0);
 }
 
 #[test]
 fn the_jig_lowered_onto_a_wall_stops_on_it_and_does_not_go_through() {
-    // a bolted-down bath: the wall does not give
+    // a bolted-down tank: the wall does not give
     let mut w = world(&Physics { pivot_friction: 50.0, rock: false, ..Physics::default() });
     w.step(0.01, [1800.0, 0.0, 0.0]); // 300 mm too far over: the jig's right edge is over the wall
     let mut blocked_z = false;
@@ -183,9 +183,9 @@ fn the_jig_lowered_onto_a_wall_stops_on_it_and_does_not_go_through() {
 }
 
 #[test]
-fn driven_sideways_into_a_bath_wall_the_carrier_stops_at_the_wall() {
+fn driven_sideways_into_a_tank_wall_the_carrier_stops_at_the_wall() {
     let mut w = world(&Physics { rock: false, ..Physics::default() });
-    w.step(0.01, [1500.0, 0.0, 1000.0]); // in the bath, centred
+    w.step(0.01, [1500.0, 0.0, 1000.0]); // in the tank, centred
     let mut x = 1500.0;
     let mut stopped = None;
     for _ in 0..200 {
@@ -221,7 +221,7 @@ fn a_thicker_wall_is_a_setting_and_stops_the_jig_sooner() {
         o
     };
     let as_designed = lower_centred(0.0);
-    assert!(!as_designed.blocked[2], "the jig fits the bath as designed: {as_designed:?}");
+    assert!(!as_designed.blocked[2], "the jig fits the tank as designed: {as_designed:?}");
     assert!((as_designed.carrier[2] - 1200.0).abs() < 1.0);
     // 150 mm walls leave 900 mm between them inside: the 800 mm jig still goes in
     assert!(!lower_centred(150.0).blocked[2]);
@@ -235,7 +235,7 @@ fn a_thicker_wall_is_a_setting_and_stops_the_jig_sooner() {
 fn a_swinging_load_that_hits_a_wall_bounces_by_the_restitution() {
     let run = |e: f64| {
         let mut w = world(&Physics { restitution: e, pivot_friction: 0.0, ..Physics::default() });
-        // the jig low in the bath, 170 mm from the east wall's inner face less its margin
+        // the jig low in the tank, 170 mm from the east wall's inner face less its margin
         w.step(0.01, [1500.0 + 170.0, 0.0, 1000.0]);
         w.st.omega[0] = 0.8; // swinging toward the wall
         let mut hit = 0.0_f64;
@@ -315,7 +315,7 @@ fn contact_between_oriented_boxes_is_exact() {
     assert!((depth - 10.0).abs() < 1e-9 && normal == [1.0, 0.0, 0.0], "{depth} {normal:?}");
 }
 
-/// The jig inside bath T2, driven east into its wall and held there.
+/// The jig inside tank T2, driven east into its wall and held there.
 fn push_east(s: &Physics, secs: f64) -> (World, Outputs) {
     let mut w = world(s);
     w.step(0.01, [1500.0, 0.0, 1000.0]);
@@ -330,14 +330,14 @@ fn push_east(s: &Physics, secs: f64) -> (World, Outputs) {
 }
 
 #[test]
-fn a_jig_driven_into_a_wall_rocks_that_bath_the_way_it_was_pushed() {
+fn a_jig_driven_into_a_wall_rocks_that_tank_the_way_it_was_pushed() {
     let (w, o) = push_east(&Physics { pivot_friction: 50.0, ..Physics::default() }, 6.0);
     assert!(o.blocked[0] && o.contact.as_deref().is_some_and(|n| n.contains("Tank T2")), "{o:?}");
     let t2 = &w.tanks[0];
-    // pushed toward +X at the wall's height: the top of the bath leans toward +X, which is a tilt about +Y
+    // pushed toward +X at the wall's height: the top of the tank leans toward +X, which is a tilt about +Y
     assert!(t2.theta[1] > 0.0005, "T2 tilts toward the push: {:?}", t2.theta);
     assert!(t2.theta[1].to_degrees() < 6.0 && t2.theta[0].abs() < t2.theta[1].abs() * 0.5, "{:?}", t2.theta);
-    // the next bath is not touched
+    // the next tank is not touched
     assert_eq!(w.tanks[1].theta, [0.0, 0.0]);
     assert!(o.push_n > 100.0 && o.push_n <= w.s.axis_force_max, "{}", o.push_n);
     // and the jig is still not inside the tilted wall
@@ -346,11 +346,11 @@ fn a_jig_driven_into_a_wall_rocks_that_bath_the_way_it_was_pushed() {
 }
 
 #[test]
-fn a_hit_rocks_the_bath_and_it_settles_again_when_the_load_leaves() {
+fn a_hit_rocks_the_tank_and_it_settles_again_when_the_load_leaves() {
     let (mut w, _) = push_east(&Physics::default(), 6.0);
     let peak = w.tanks[0].theta[1].abs();
     assert!(peak > 0.0005);
-    // back off into the middle of the bath and let it settle
+    // back off into the middle of the tank and let it settle
     let mut o = Outputs::default();
     for _ in 0..400 {
         o = w.step(0.05, [1500.0, 0.0, 1000.0]);
@@ -360,7 +360,7 @@ fn a_hit_rocks_the_bath_and_it_settles_again_when_the_load_leaves() {
 }
 
 #[test]
-fn the_mounts_and_the_mass_decide_how_far_a_bath_rocks_and_bolted_down_baths_do_not() {
+fn the_mounts_and_the_mass_decide_how_far_a_tank_rocks_and_bolted_down_tanks_do_not() {
     let rocked = |s: Physics| push_east(&s, 6.0).0.tanks[0].theta[1].abs();
     let normal = rocked(Physics::default());
     let loose = rocked(Physics { mount_stiffness_knm: 15.0, ..Physics::default() });
@@ -382,7 +382,7 @@ fn a_swinging_jig_that_hits_a_wall_gives_it_a_kick() {
     assert!(w.tanks[0].theta[1].abs() > 1e-5 || w.tanks[0].omega[1].abs() > 1e-5, "{:?}", w.tanks[0]);
 }
 
-/// However the carrier is driven, the load is never inside a solid, the baths rocking or not: a long run of hard random moves.
+/// However the carrier is driven, the load is never inside a solid, the tanks rocking or not: a long run of hard random moves.
 fn never_inside(s: Physics, frames: usize) -> (usize, usize) {
     let mut w = world(&s);
     let mut seed: u64 = 99;
@@ -421,7 +421,7 @@ fn however_the_carrier_is_driven_the_load_never_ends_up_inside_a_solid() {
     let (_, inside) = never_inside(Physics { rock: false, ..Physics::default() }, 2000);
     assert_eq!(inside, 0);
     let (_, inside) = never_inside(Physics { mount_stiffness_knm: 5.0, tank_mass: 50.0, restitution: 0.9, wall_thickness_mm: 120.0, ..Physics::default() }, 2000);
-    assert_eq!(inside, 0, "loose baths, thick walls, a lively bounce");
+    assert_eq!(inside, 0, "loose tanks, thick walls, a lively bounce");
     // what is drawn is what is checked: an exaggerated swing hits the walls sooner, it never goes through them
     let (_, inside) = never_inside(Physics { sway_gain: 4.0, ..Physics::default() }, 2000);
     assert_eq!(inside, 0, "sway gain 4");
@@ -430,7 +430,7 @@ fn however_the_carrier_is_driven_the_load_never_ends_up_inside_a_solid() {
 }
 
 #[test]
-fn a_rim_pressed_by_the_hoist_gives_a_little_as_the_bath_tilts_and_the_hoist_stops_pushing_at_its_limit() {
+fn a_rim_pressed_by_the_hoist_gives_a_little_as_the_tank_tilts_and_the_hoist_stops_pushing_at_its_limit() {
     let mut w = world(&Physics { pivot_friction: 50.0, ..Physics::default() });
     w.step(0.01, [1800.0, 0.0, 0.0]);
     let mut o = Outputs::default();
@@ -438,7 +438,7 @@ fn a_rim_pressed_by_the_hoist_gives_a_little_as_the_bath_tilts_and_the_hoist_sto
         o = w.step(0.05, [1800.0, 0.0, (10.0 * k as f64).min(1220.0)]);
         assert!(w.hit(o.carrier, w.st.phi).is_none(), "inside the rim at step {k}");
     }
-    // the jig sits on the rim at 148 mm; the east side of the bath is pressed down a few centimetres at most, and no further
+    // the jig sits on the rim at 148 mm; the east side of the tank is pressed down a few centimetres at most, and no further
     assert!(o.blocked[2], "{o:?}");
     assert!((148.0..215.0).contains(&o.carrier[2]), "{}", o.carrier[2]);
     assert!(o.push_n <= w.s.axis_force_max + 1e-9, "{}", o.push_n);

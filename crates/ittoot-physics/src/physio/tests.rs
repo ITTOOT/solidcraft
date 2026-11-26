@@ -26,7 +26,7 @@ fn the_block_for_each_application_has_exactly_the_members_the_standard_links_nam
     assert_eq!(key(&links.plant_level_key, "T-101"), "Physics_01.level_T_101");
     let hoist = json!({"meta": {"application": "plating_line"}});
     let s = scl(&hoist, &["T2".to_string(), "T2".to_string(), "T3".to_string()]);
-    // a bath named twice gives one member; every axis flag is there
+    // a tank named twice gives one member; every axis flag is there
     assert_eq!(s.matches("fill_T2 :").count(), 1);
     for want in ["blockedX : Bool", "blockedY : Bool", "blockedHoist : Bool", "slack : Bool", "overload : Bool", "contact : Bool", "drain_T3 : Real"] {
         assert!(s.contains(want), "{want}");

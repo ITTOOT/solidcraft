@@ -38,7 +38,7 @@ pub struct BridgeSettings {
     /// Address of the design agent (AI Office); empty means its default.
     #[serde(default)]
     pub design_agent: String,
-    /// A design agent project folder (design.json, model-script.json) whose rail and baths the PLC's transport runs on; empty: the plain template.
+    /// A design agent project folder (design.json, model-script.json) whose rail and tanks the PLC's transport runs on; empty: the plain template.
     #[serde(default)]
     pub design_model_dir: String,
     /// The job: its number titles every document and model, and names the folder they are saved in.

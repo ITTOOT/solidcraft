@@ -84,7 +84,7 @@ pub fn map_through(pts: &[(f64, f64)], v: f64) -> f64 {
 pub struct ModelPlan {
     /// Where the model's bounding box starts (X, Y) in mm, for drawing.
     pub origin: [f64; 3],
-    /// A design's own build script (rail, baths, pipes...), sent instead of the template's commands.
+    /// A design's own build script (rail, tanks, pipes...), sent instead of the template's commands.
     pub raw: Option<Vec<Json>>,
     pub parts: Vec<Part>,
     pub joints: Vec<JointPlan>,

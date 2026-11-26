@@ -1,5 +1,5 @@
 //! Scripted run for the 30 s digital-twin physics video: the engine's own physics (`physics.load` / `physics.step`) on the HoistGantry plating rail.
-//! Scenes: fast move so the jig swings; the same move with sway reduced by a live `physics.settings`; the jig driven into a bath wall (held, the bath rocks);
+//! Scenes: fast move so the jig swings; the same move with sway reduced by a live `physics.settings`; the jig driven into a tank wall (held, the tank rocks);
 //! lowered into the liquid while the level drains; dropped on the rim (rope goes slack).
 //! usage: physvideo <design folder> <control port> <marker log file> [shots folder]
 //! Every marker line is `ms-since-epoch name`, so the screen recording can be cut by the wall clock.
@@ -21,7 +21,7 @@ const SCRIPT: &[(f64, f64, f64, f64)] = &[
     (11.0, 0.0, 0.0, 0.0),
     (13.0, 6000.0, 0.0, 0.0),  // 2 the same move, sway reduced
     (16.5, 6000.0, 0.0, 0.0),
-    (19.5, 1500.0, 0.0, 0.0),  // to the bath
+    (19.5, 1500.0, 0.0, 0.0),  // to the tank
     (21.0, 1500.0, 0.0, 0.0),
     (23.0, 1500.0, 0.0, 1000.0), // lower into the liquid
     (24.5, 1500.0, 0.0, 1000.0),
@@ -114,7 +114,7 @@ fn main() -> Result<(), String> {
     // live settings changes: (time, marker, settings)
     let mut events: Vec<(f64, &str, Value)> = vec![
         (10.9, "sway_reduced", json!({"sway_gain": 0.2, "pivot_friction": 120.0, "accel_smoothing_s": 0.6})),
-        (22.5, "bath_mounts_softened", json!({"mount_stiffness_knm": 30.0, "rock_damping": 0.08, "axis_force_max": 8000.0})),
+        (22.5, "tank_mounts_softened", json!({"mount_stiffness_knm": 30.0, "rock_damping": 0.08, "axis_force_max": 8000.0})),
         (23.0, "drain_open", json!({"flow": {"drain_open": 1.0, "drain_dn_mm": 90.0}})),
     ];
     events.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());

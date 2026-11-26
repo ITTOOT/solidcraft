@@ -1,9 +1,9 @@
-//! A design agent's model (the rail, the baths, pipes, trays, panels...) as the machine the PLC drives: the design's
+//! A design agent's model (the rail, the tanks, pipes, trays, panels...) as the machine the PLC drives: the design's
 //! parts become the plan's parts, its own build script is sent as it is, and each PLC axis position is mapped onto
-//! the design's joint so the transport runs along the rail and stops over the baths.
+//! the design's joint so the transport runs along the rail and stops over the tanks.
 //!
 //! The map is made from the stations: the PLC's station table gives where the transport goes (X, Y, Z), the design's
-//! station list gives where each bath is, so station k of the PLC is bath k of the design and the position between
+//! station list gives where each tank is, so station k of the PLC is tank k of the design and the position between
 //! them is interpolated. Height maps the PLC's "up" height to the design's carry height and the deepest dip to the
 //! hoist stroke. Nothing here invents a position: with no stations a plain scale is used and the plan says so.
 
@@ -47,7 +47,7 @@ pub fn from_design(base: &ModelPlan, design: &Json, script: Vec<Json>, stations:
             parts.push(Part { name: name.to_string(), bodies, grounded: p["grounded"].as_bool().unwrap_or(true) });
         }
     }
-    let mut notes = vec![format!("Model from the design agent: {} (rail, baths, pipes, trays, panels). The PLC's axes drive its joints.", design["meta"]["name"].as_str().unwrap_or("design"))];
+    let mut notes = vec![format!("Model from the design agent: {} (rail, tanks, pipes, trays, panels). The PLC's axes drive its joints.", design["meta"]["name"].as_str().unwrap_or("design"))];
     let mut joints: Vec<JointPlan> = Vec::new();
     for letter in ['X', 'Y', 'Z'] {
         let Some(b) = base.joints.iter().find(|j| j.letter == letter) else { continue };
@@ -70,7 +70,7 @@ pub fn from_design(base: &ModelPlan, design: &Json, script: Vec<Json>, stations:
     if joints.len() < 2 {
         return Err("the design has no gantry joints (it needs one transporter)".into());
     }
-    // X: station k of the PLC is bath k of the design
+    // X: station k of the PLC is tank k of the design
     let dx: Vec<f64> = design["geometry"]["stationX"].as_array().map(|a| a.iter().map(|s| f(&s["x"])).collect()).unwrap_or_default();
     let mut sorted: Vec<&StationPoint> = stations.iter().collect();
     sorted.sort_by(|a, b| a.x.total_cmp(&b.x));
@@ -78,10 +78,10 @@ pub fn from_design(base: &ModelPlan, design: &Json, script: Vec<Json>, stations:
         match j.letter {
             'X' if sorted.len() >= 2 && sorted.len() == dx.len() => {
                 j.map = sorted.iter().zip(&dx).map(|(s, x)| (s.x, *x)).collect();
-                notes.push(format!("X: the {} PLC stations are the design's {} baths, in order; positions between them are interpolated.", sorted.len(), dx.len()));
+                notes.push(format!("X: the {} PLC stations are the design's {} tanks, in order; positions between them are interpolated.", sorted.len(), dx.len()));
             }
             'Y' => {
-                // the stations' row is where the jig hangs over the middle of the bath (the joint's start is the bath's centre line);
+                // the stations' row is where the jig hangs over the middle of the tank (the joint's start is the tank's centre line);
                 // PLC positions beyond the row travel the hook's cross range
                 let mid = stations.iter().filter_map(|s| s.y).next().unwrap_or(j.limits.1 / 2.0);
                 j.map = vec![(j.limits.0, j.drive_limits.0), (mid, j.drive_limits.0), (j.limits.1, j.drive_limits.1)];
@@ -91,7 +91,7 @@ pub fn from_design(base: &ModelPlan, design: &Json, script: Vec<Json>, stations:
                 let down = stations.iter().filter_map(|s| s.z_down).fold(f64::NAN, f64::max);
                 if up.is_finite() && down.is_finite() && down > up {
                     j.map = vec![(up, j.drive_limits.0), (down, j.drive_limits.1)];
-                    notes.push(format!("Z: the PLC's up height ({up:.0} mm) is the carry height and its deepest dip ({down:.0} mm) seats the jig in the bath (hoist stroke {:.0} mm).", j.drive_limits.1));
+                    notes.push(format!("Z: the PLC's up height ({up:.0} mm) is the carry height and its deepest dip ({down:.0} mm) seats the jig in the tank (hoist stroke {:.0} mm).", j.drive_limits.1));
                 }
             }
             _ => {}
@@ -146,7 +146,7 @@ mod tests {
     }
 
     #[test]
-    fn stations_of_the_plc_are_baths_of_the_design() {
+    fn stations_of_the_plc_are_tanks_of_the_design() {
         let p = from_design(&base(), &design(), vec![], &stations()).unwrap();
         let x = &p.joints[0];
         assert_eq!(x.name, "Gantry X");
@@ -154,7 +154,7 @@ mod tests {
         assert_eq!(x.to_joint(1250.0), 750.0, "between two stations it is interpolated");
         assert_eq!(x.to_joint(-5000.0), 0.0, "and never leaves the joint's travel");
         let y = &p.joints[1];
-        assert_eq!(y.to_joint(3000.0), 0.0, "the stations' row hangs the jig over the middle of the bath");
+        assert_eq!(y.to_joint(3000.0), 0.0, "the stations' row hangs the jig over the middle of the tank");
         assert_eq!(y.to_joint(0.0), 0.0);
         let z = &p.joints[2];
         assert_eq!((z.to_joint(150.0), z.to_joint(2000.0)), (0.0, 800.0));

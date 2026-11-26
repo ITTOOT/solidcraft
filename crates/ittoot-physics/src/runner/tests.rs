@@ -117,7 +117,7 @@ fn a_hoist_held_by_a_wall_comes_back_held_and_the_plc_is_told() {
     s.sway = false;
     let joints = ["Gantry X", "Gantry Y", "Hoist Z"];
     let mut r = Runner::new();
-    // the jig hangs at x 0 over the rail; drive it hard toward the bath wall at x 900 with the hook low enough to meet it
+    // the jig hangs at x 0 over the rail; drive it hard toward the tank wall at x 900 with the hook low enough to meet it
     let mut last = StepOut::default();
     let mut x = 0.0;
     for _ in 0..200 {
@@ -140,7 +140,7 @@ fn names_and_arithmetic_the_runner_uses() {
     assert_eq!(sway_names("Transporter A Z").0, "Transporter A Sway Rx");
     assert_eq!(slack_name("Hoist Z"), "Rope slack");
     assert_eq!(slack_name("Transporter B Z"), "Transporter B rope slack");
-    assert_eq!(bath_id("Tank T2"), "T2");
+    assert_eq!(tank_id("Tank T2"), "T2");
     assert_eq!(rope_sag_mm(0.0, 2000.0), 0.0);
     assert!((rope_sag_mm(100.0, 2000.0) - 273.9).abs() < 0.5);
     assert_eq!(rope_sag_mm(5000.0, 3000.0), 350.0);

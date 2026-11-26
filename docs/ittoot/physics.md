@@ -1,12 +1,12 @@
 # Digital twin physics
 
-What a machine does when the PLC drives it: a hoist swinging on its rope and held by the walls it meets, baths rocking on their mounts, liquid levels, cartons on belts, vessels filled by pumps. The same code runs in the bridge app and inside Solidcraft's engine.
+What a machine does when the PLC drives it: a hoist swinging on its rope and held by the walls it meets, tanks rocking on their mounts, liquid levels, cartons on belts, vessels filled by pumps. The same code runs in the bridge app and inside Solidcraft's engine.
 
 ## Where the code is
 
 | Part | Where |
 |---|---|
-| Physics (swing, exact oriented-box contact, rocking baths, drag, buoyancy) | `crates/ittoot-physics/src/physics.rs` |
+| Physics (swing, exact oriented-box contact, rocking tanks, drag, buoyancy) | `crates/ittoot-physics/src/physics.rs` |
 | Liquid levels, pump and valve flow, friction | `fluid.rs` |
 | Cartons on belts, load creator, robot pick and place | `loads.rs` |
 | Process plant (vessels, pumps, valves, gravity lines) | `plant.rs` |
@@ -21,7 +21,7 @@ What a machine does when the PLC drives it: a hoist swinging on its rope and hel
 
 The physics reads the JSON the design agent writes (`meta.application`, `spec`, `geometry`):
 
-- A hoist or plating design: `geometry.parts` (solids, baths) and the joints for the gantry, `Sway Rx/Ry`, `Rope slack`, `Tank T Level`, `Tank T Rock Rx/Ry`.
+- A hoist or plating design: `geometry.parts` (solids, tanks) and the joints for the gantry, `Sway Rx/Ry`, `Rope slack`, `Tank T Level`, `Tank T Rock Rx/Ry`.
 - A conveyor line or robot cell: `geometry.belts` and `geometry.loads` (two slider joints per carton, `Load i X` and `Load i Z`).
 - A process plant: `geometry.process` (vessels, pumps, lines) and one `Vessel T Level` slider per vessel.
 
@@ -45,7 +45,7 @@ Try it: `cargo run -p ittoot-bridge-app --example physdemo -- <design folder> <c
 
 ## Settings
 
-Every number is a setting (`physics::FIELDS` lists them with range and help text) and is kept with the bridge's settings. Groups: gravity and atmosphere, liquid, the load, sway, solids and collisions, baths rock, flow and pressure, cartons on belts, process plant.
+Every number is a setting (`physics::FIELDS` lists them with range and help text) and is kept with the bridge's settings. Groups: gravity and atmosphere, liquid, the load, sway, solids and collisions, tanks rock, flow and pressure, cartons on belts, process plant.
 
 ## What it does not do
 
@@ -57,4 +57,4 @@ Every number is a setting (`physics::FIELDS` lists them with range and help text
 
 `cargo run -p ittoot-bridge-app --example physlive -- <design folder> opc.tcp://<plc ip>:4840` runs the physics against a PLC that has the `Physics_01` block: it reads the valve signals, steps a hoist design, and writes `blockedX`, `contact` and the other flags back, then reads them over OPC UA to check. Keys in the PLC links are plain (`Physics_01.fill_T2`, no quotes): the OPC UA driver adds the quotes itself.
 
-Result on 2026-11-25 (HoistGantry v1.0.1 copy with `Physics_01` imported, PLCSIM Advanced instance `HG_Sim`, TIA V18): all five checks passed (valve opened in the PLC raised the bath level by 137 mm; driving into the wall set `blockedX` and `contact` in the PLC; backing off cleared them; every write reached the PLC). The values were also read back through PLCSIM's own API. Not run: a real CPU, the HMI, or Solidcraft in the same run.
+Result on 2026-11-25 (HoistGantry v1.0.1 copy with `Physics_01` imported, PLCSIM Advanced instance `HG_Sim`, TIA V18): all five checks passed (valve opened in the PLC raised the tank level by 137 mm; driving into the wall set `blockedX` and `contact` in the PLC; backing off cleared them; every write reached the PLC). The values were also read back through PLCSIM's own API. Not run: a real CPU, the HMI, or Solidcraft in the same run.

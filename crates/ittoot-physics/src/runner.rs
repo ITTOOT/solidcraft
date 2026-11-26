@@ -97,7 +97,7 @@ pub fn rope_sag_mm(slack: f64, rope: f64) -> f64 {
 }
 
 /// "Tank T2" gives "T2".
-pub fn bath_id(name: &str) -> String {
+pub fn tank_id(name: &str) -> String {
     name.strip_prefix("Tank ").unwrap_or(name).to_string()
 }
 
@@ -143,7 +143,7 @@ impl Runner {
     /// The PLC signals the physics reads for the design it has built.
     pub fn input_keys(&self, s: &Physics) -> Vec<String> {
         let p = &s.plc;
-        let ids: Vec<String> = self.world.as_ref().map(|w| w.baths.iter().map(|b| bath_id(&b.name)).collect()).unwrap_or_default();
+        let ids: Vec<String> = self.world.as_ref().map(|w| w.liquids.iter().map(|b| tank_id(&b.name)).collect()).unwrap_or_default();
         let mut keys = Vec::new();
         let belts: Vec<String> = self.line.as_ref().map(|l| l.belts.iter().map(|b| b.id.clone()).collect()).unwrap_or_default();
         if !p.zone_run_key.trim().is_empty() {
@@ -185,7 +185,7 @@ impl Runner {
         if self.world.is_none() || self.built.as_ref() != Some(&key) {
             match World::from_design(design, s0) {
                 Ok(mut w) => {
-                    self.levels = w.bath_levels().into_iter().map(|(mm, max, area)| Level { mm, max_mm: max, area_m2: area }).collect();
+                    self.levels = w.tank_levels().into_iter().map(|(mm, max, area)| Level { mm, max_mm: max, area_m2: area }).collect();
                     self.sent_level.clear();
                     w.reset();
                     self.world = Some(w);
@@ -202,7 +202,7 @@ impl Runner {
         let Some([xn, yn, zn]) = inp.axes.clone() else { return res };
         let (Some(x), Some(y), Some(z)) = (inp.commanded.get(&xn).copied(), inp.commanded.get(&yn).copied(), inp.commanded.get(&zn).copied()) else { return res };
         let dt = inp.dt.clamp(0.0, 0.5);
-        // the physics only moves what Solidcraft's own model has: with no sway joints there it treats the jig as rigid on its hook, and with no rock joints the baths as bolted down,
+        // the physics only moves what Solidcraft's own model has: with no sway joints there it treats the jig as rigid on its hook, and with no rock joints the tanks as bolted down,
         // so what is drawn is what was checked (a swing the picture does not show would let the drawn jig through a wall)
         let live_has = |n: &str| inp.live_joints.is_some_and(|l| l.iter().any(|j| j == n));
         let design_has = |n: &str| design["geometry"]["joints"].as_array().is_some_and(|a| a.iter().any(|j| j["name"] == n));
@@ -218,15 +218,15 @@ impl Runner {
         }
         if !rock_ok {
             s.rock = false;
-            notes.push("no bath rock joints (the baths are treated as bolted down)");
+            notes.push("no tank rock joints (the tanks are treated as bolted down)");
         }
         self.message = if notes.is_empty() { String::new() } else { format!("Solidcraft's model has {}. Rebuild the model from the current design (Model page, Build) to get them.", notes.join(" and ")) };
         let rho = s.liquid_density;
         let mu = s.liquid_viscosity_mpas / 1000.0;
         let supply = fluid::supply(&s.flow, rho, mu);
         self.supply = Some(supply);
-        // each bath fills and drains by its own valves: the PLC's signals when they are linked, else the settings
-        let ids: Vec<String> = self.world.as_ref().map(|w| w.baths.iter().map(|b| bath_id(&b.name)).collect()).unwrap_or_default();
+        // each tank fills and drains by its own valves: the PLC's signals when they are linked, else the settings
+        let ids: Vec<String> = self.world.as_ref().map(|w| w.liquids.iter().map(|b| tank_id(&b.name)).collect()).unwrap_or_default();
         for (i, id) in ids.iter().enumerate() {
             let mut flow = s.flow.clone();
             if let Some(v) = Self::open(inp, &s.plc.fill_key, id) {
@@ -260,7 +260,7 @@ impl Runner {
         if has(&ry) {
             res.drives.push((ry.clone(), out.sway_deg[1]));
         }
-        // the baths on their mounts tilt about X and about Y at the middle of their base
+        // the tanks on their mounts tilt about X and about Y at the middle of their base
         for (tank, deg) in &out.rock_deg {
             for (suffix, v) in [("Rock Rx", deg[0]), ("Rock Ry", deg[1])] {
                 let name = format!("{tank} {suffix}");
@@ -269,8 +269,8 @@ impl Runner {
                 }
             }
         }
-        // the liquid's surface in each bath
-        let level0: Vec<(String, f64)> = self.world.as_ref().map(|w| w.baths.iter().map(|b| (b.name.clone(), b.level0)).collect()).unwrap_or_default();
+        // the liquid's surface in each tank
+        let level0: Vec<(String, f64)> = self.world.as_ref().map(|w| w.liquids.iter().map(|b| (b.name.clone(), b.level0)).collect()).unwrap_or_default();
         for (i, (name, l0)) in level0.iter().enumerate() {
             let joint = format!("{name} Level");
             let mm = self.levels.get(i).map(|l| l.mm).unwrap_or(*l0);

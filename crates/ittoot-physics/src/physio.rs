@@ -45,9 +45,9 @@ fn text(v: &Json) -> String {
     v.as_str().unwrap_or_default().to_string()
 }
 
-/// The source of the data block for a design: the members every application of the design uses. `bath_ids` are the baths of a hoist design (the
+/// The source of the data block for a design: the members every application of the design uses. `tank_ids` are the tanks of a hoist design (the
 /// bridge builds them from the drawn model).
-pub fn scl(design: &Json, bath_ids: &[String]) -> String {
+pub fn scl(design: &Json, tank_ids: &[String]) -> String {
     let mut rows: Vec<(String, &str, &str)> = Vec::new();
     let mut add = |n: String, t: &'static str, c: &'static str| {
         if !rows.iter().any(|r| r.0 == n) {
@@ -87,7 +87,7 @@ pub fn scl(design: &Json, bath_ids: &[String]) -> String {
             add("slack".into(), "Bool", "written: the hoist has paid out rope the hook has not gone down");
             add("overload".into(), "Bool", "written: a drive pushes at its force limit");
             add("contact".into(), "Bool", "written: the load touches anything");
-            for id in bath_ids {
+            for id in tank_ids {
                 let id = tag_id(id);
                 add(format!("fill_{id}"), "Real", "read: how far the fill valve is open (0 shut, 1 or 100 open)");
                 add(format!("drain_{id}"), "Real", "read: how far the drain valve is open");
