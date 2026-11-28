@@ -74,7 +74,8 @@ Not verified: the live link to a running Solidcraft window (Connect / Build / pu
 
 ## Update 2026-11-19 (later): live PLC, two windows
 
-- **HoistGantry v1.0.1** (`Projects\Siemens\V18\1511-1_HoistGantry_v1.0.1_V18`): v1.0 with the CPU OPC UA server on, small OPC UA licence, PLC address 169.254.202.50 for the PLCSIM Advanced virtual adapter. Notes in its `Documentation\HoistGantry_v1.0.1_Notes.md`; the way it was made and run is in Knowledge `Siemens_PLCSIM_Load_Procedure.md` (addendum).
+- **Plating Line v0.0** (`Projects\Siemens\V18\PlatingLine\1511-1_PlatingLine_v0.0_V18`): the working PLC project since 2026-11-28 (OPC UA on, address 169.254.202.53, instance `PL_Sim`).
+- **HoistGantry v1.0.1** (older project) (`Projects\Siemens\V18\1511-1_HoistGantry_v1.0.1_V18`): v1.0 with the CPU OPC UA server on, small OPC UA licence, PLC address 169.254.202.50 for the PLCSIM Advanced virtual adapter. Notes in its `Documentation\HoistGantry_v1.0.1_Notes.md`; the way it was made and run is in Knowledge `Siemens_PLCSIM_Load_Procedure.md` (addendum).
 - **Verified live**: downloaded to a PLCSIM Advanced instance (0 errors), CPU in RUN, the bridge connected over OPC UA (guest, no security) and read the real data blocks; with the system in MANUAL / HMI CTRL / enabled / jogging, the PLC's own axis logic moved the axes and the joints of the Solidcraft model followed them (journal: all commands accepted).
 - **Bug found and fixed**: the poller read only the table on show, so joints bound to signals in another table never moved. It now always reads the bound signals too.
 - **Two Solidcraft windows at once** (ports 38400 and 38401, started from the "+" model): both built, both followed the PLC, separate journals.

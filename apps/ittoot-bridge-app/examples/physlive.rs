@@ -1,6 +1,9 @@
 //! Runs the physics against a real PLC over OPC UA, with no Solidcraft: the physics reads the PLC's `Physics_01` valve signals, steps a hoist
 //! design, and writes the flags it finds (stopped by a solid, contact, slack, overload) back into the PLC's data block.
 //! usage: physlive <design folder> <opc.tcp://ip:4840>
+//! The design decides the three axes driven: the first transporter of the Plating Line design (`Transporter A X/Y/Z`), else the gantry and hoist
+//! of the hoist design (`Gantry X`, `Gantry Y`, `Hoist Z`). The PLC project behind it is the Plating Line project (Physics_01 for that design); the
+//! HoistGantry project with the `hoist_stand` design is the older one and still passes.
 //! Checks (each printed PASS or FAIL): a valve opened in the PLC raises the tank level; driving the gantry into a tank wall sets `blockedX` and
 //! `contact` in the PLC (read back over OPC UA); backing off clears them.
 use ittoot_bridge::driver::{PlcDriver, Value};
@@ -37,7 +40,13 @@ fn main() -> Result<(), String> {
     // the PLC logic is stood in for by two writes: the fill valve of tank T2 is opened, the others are shut
     plc.write("Physics_01.fill_T2", Value::Real(100.0)).map_err(|e| e.to_string())?;
     plc.write("Physics_01.drain_T2", Value::Real(0.0)).map_err(|e| e.to_string())?;
-    let axes = ["Gantry X".to_string(), "Gantry Y".to_string(), "Hoist Z".to_string()];
+    let has = |n: &str| joints.iter().any(|j| j == n);
+    let axes: [String; 3] = if has("Transporter A X") && has("Transporter A Z") {
+        ["Transporter A X".to_string(), "Transporter A Y".to_string(), "Transporter A Z".to_string()]
+    } else {
+        ["Gantry X".to_string(), "Gantry Y".to_string(), "Hoist Z".to_string()]
+    };
+    println!("driving {:?}", axes);
     let mut level0: Option<f64> = None;
     let mut level_now = 0.0;
     let mut max_blocked = false;
@@ -60,7 +69,7 @@ fn main() -> Result<(), String> {
         let read = plc.read(&keys).map_err(|e| e.to_string())?;
         let signals: BTreeMap<String, f64> = keys.iter().cloned().zip(read).filter_map(|(k, v)| Some((k, number(&v?)?))).collect();
         let (x, z) = script(t);
-        let commanded: BTreeMap<String, f64> = [("Gantry X".to_string(), x), ("Gantry Y".to_string(), 0.0), ("Hoist Z".to_string(), z)].into_iter().collect();
+        let commanded: BTreeMap<String, f64> = [(axes[0].clone(), x), (axes[1].clone(), 0.0), (axes[2].clone(), z)].into_iter().collect();
         let inp = Inputs { dt, axes: Some(axes.clone()), commanded: &commanded, live_joints: Some(&joints), signal: &|k| signals.get(k).copied() };
         let out = runner.step(&s, &design, 1, &inp);
         for (joint, v) in &out.drives {

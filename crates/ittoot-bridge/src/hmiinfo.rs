@@ -57,7 +57,7 @@ pub const MAKERS: &[Maker] = &[
         name: "Siemens",
         products: "TIA Portal WinCC (Basic / Advanced / Unified runtime) with S7-PLCSIM or PLCSIM Advanced",
         steps: &[
-            "Start the PLC emulation and load the program: an S7-PLCSIM Advanced instance (for example HG_Sim) shown green under 'Active PLC Instance(s)', with 'TCP/IP communication with <Local>'. For S7-PLCSIM V18 start the simulator and power on the instance.",
+            "Start the PLC emulation and load the program: an S7-PLCSIM Advanced instance (for example PL_Sim) shown green under 'Active PLC Instance(s)', with 'TCP/IP communication with <Local>'. For S7-PLCSIM V18 start the simulator and power on the instance.",
             "Check this PC has an adapter in the instance's address range (run ipconfig): for PLCSIM Advanced it is 169.254.x.x, the same first two numbers as the instance's IP address.",
             "Open Set PG/PC Interface: press the button below, or Windows Control Panel (View by: Large icons) > Set PG/PC Interface (32-bit), or press the Windows key, type s7epatdx.cpl and press Enter.",
             "In the window, tab 'Access Path': set 'Access Point of the Application' to 'S7ONLINE (STEP 7)'. In the list under it select 'PLCSIM.TCPIP.1' (some versions call it 'PLCSIM Virtual Eth. Adapter.TCPIP.1'). 'Interface Parameter Assignment Used' now reads 'PLCSIM.TCPIP.1'. For S7-PLCSIM V18 choose 'PLCSIM' instead.",
