@@ -568,6 +568,8 @@ pub struct World {
     pub st: State,
     /// Jig outline sizes (m): width along X, thickness along Y, height.
     jig_m: [f64; 3],
+    /// Pairs of solids (a tank's, another's) that already overlap at rest: equipment fixed to a tank, which a tilt carries along.
+    rest_pairs: std::collections::HashSet<(usize, usize)>,
 }
 
 fn num(v: &Json) -> f64 {
@@ -637,7 +639,11 @@ impl World {
             if name.contains(" liquid") {
                 continue;
             }
-            if (p["grounded"] == false && !is_tank) || !solid_words.iter().any(|w| name.to_lowercase().contains(w)) || name.contains(" mount") {
+            // every fixed part is solid, and so is a tank on its mounts; what moves with the machine (the gantry, the hoist) is not
+            // (`solid_parts` names further parts, kept for settings saved before every fixed part counted)
+            let fixed = p["grounded"] == true;
+            let named = solid_words.iter().any(|w| name.to_lowercase().contains(w));
+            if (!fixed && !is_tank && !(named && p["grounded"] != false)) || name.contains(" mount") {
                 continue;
             }
             let bs: Vec<(String, Aabb)> = p["bodies"].as_array().map(|a| a.iter().filter_map(|b| Some((b["name"].as_str()?.to_string(), box_of(b)?))).collect()).unwrap_or_default();
@@ -697,7 +703,9 @@ impl World {
                 p.load_mass = kg;
             }
         }
-        Ok(World { s: p, rig: Rig { pivot, bodies, jig: jig_b, axes, limits }, solids, liquids, tanks, st: State::default(), jig_m })
+        let mut world = World { s: p, rig: Rig { pivot, bodies, jig: jig_b, axes, limits }, solids, liquids, tanks, st: State::default(), jig_m, rest_pairs: Default::default() };
+        world.rest_pairs = world.overlapping_at_rest();
+        Ok(world)
     }
 
     /// Set the liquid level (mm above the tank floor) of every tank: the tanks of a line are filled alike.
@@ -801,6 +809,71 @@ impl World {
             }
         }
         None
+    }
+
+    /// The pairs of a tank's solid and another solid that overlap with the tanks upright: parts fixed to the tank, or modelled one in another.
+    fn overlapping_at_rest(&self) -> std::collections::HashSet<(usize, usize)> {
+        let mut out = std::collections::HashSet::new();
+        for (i, a) in self.solids.iter().enumerate() {
+            let Some(ti) = a.tank else { continue };
+            for (j, b) in self.solids.iter().enumerate() {
+                if b.tank == Some(ti) || i == j {
+                    continue;
+                }
+                if obb_of(&a.bounds).overlap(&obb_of(&b.bounds), 0.0).is_some_and(|(d, _)| d > 1e-6) {
+                    out.insert((i, j));
+                }
+            }
+        }
+        out
+    }
+
+    /// Whether any solid of tank `ti`, tilted as it is, is inside another solid (apart from the pairs that overlap at rest).
+    fn tank_in_solid(&self, ti: usize) -> bool {
+        for (i, a) in self.solids.iter().enumerate() {
+            if a.tank != Some(ti) {
+                continue;
+            }
+            let ao = self.solid_obb(a);
+            for (j, b) in self.solids.iter().enumerate() {
+                if b.tank == Some(ti) || self.rest_pairs.contains(&(i, j)) || self.rest_pairs.contains(&(j, i)) {
+                    continue;
+                }
+                if ao.overlap(&self.solid_obb(b), 0.0).is_some_and(|(d, _)| d > 1e-3) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// A tank that tilted into another solid (the bund, a neighbour, the equipment round it) is stopped where it first touches: it never lies
+    /// inside it. `before` is each tank's tilt at the start of the step; the tilt is moved back along the way it came, and the speed into the
+    /// solid is lost to the bounce.
+    fn limit_tilt(&mut self, before: &[[f64; 2]]) {
+        for ti in 0..self.tanks.len() {
+            let Some(b) = before.get(ti).copied() else { continue };
+            if !self.tank_in_solid(ti) {
+                continue;
+            }
+            let now = self.tanks[ti].theta;
+            let (mut lo, mut hi) = (0.0_f64, 1.0_f64);
+            for _ in 0..24 {
+                let mid = 0.5 * (lo + hi);
+                self.tanks[ti].theta = [b[0] + (now[0] - b[0]) * mid, b[1] + (now[1] - b[1]) * mid];
+                if self.tank_in_solid(ti) {
+                    hi = mid;
+                } else {
+                    lo = mid;
+                }
+            }
+            self.tanks[ti].theta = [b[0] + (now[0] - b[0]) * lo, b[1] + (now[1] - b[1]) * lo];
+            for ax in 0..2 {
+                if (now[ax] - b[ax]) * self.tanks[ti].omega[ax] > 0.0 {
+                    self.tanks[ti].omega[ax] *= -self.s.restitution;
+                }
+            }
+        }
     }
 
     /// Move the carrier from `from` toward `to`, one axis after the other (X, Y, then the hoist), each in small steps, and stop
@@ -1111,6 +1184,7 @@ impl World {
             let tilt_before: Vec<[f64; 2]> = self.tanks.iter().map(|t| t.theta).collect();
             if self.s.rock && !self.tanks.is_empty() {
                 self.rock(h, &torque);
+                self.limit_tilt(&tilt_before);
             }
             // the safety net: a tank that tilted into the load, or anything left over, is pushed apart by moving the carrier back
             for _ in 0..6 {

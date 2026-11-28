@@ -465,3 +465,78 @@ fn a_jig_that_lands_on_a_rim_keeps_swinging_it_is_not_snapped_still() {
     }
     assert!(peak > 1.0, "it keeps swinging on the rim: {peak}");
 }
+
+/// [`design`] with the tanks raised `stand` mm on their mounts (the rock joints turn about the top of the stand) and a bund slab under them.
+fn design_on_stand(stand: f64) -> Json {
+    let mut d = design();
+    let parts = d["geometry"]["parts"].as_array_mut().expect("parts");
+    for p in parts.iter_mut().filter(|p| p["name"].as_str().is_some_and(|n| n.starts_with("Tank "))) {
+        for b in p["bodies"].as_array_mut().expect("bodies") {
+            let z = b["corner"][2].as_f64().unwrap_or(0.0) + stand;
+            b["corner"][2] = json!(z);
+        }
+    }
+    parts.push(json!({"name": "Bund", "grounded": true, "bodies": [{"name": "Bund floor", "kind": "box", "corner": [-1200, -1500, -50], "size": [12900, 3000, 50]}]}));
+    for j in d["geometry"]["joints"].as_array_mut().expect("joints") {
+        if j["name"].as_str().is_some_and(|n| n.contains("Rock")) {
+            j["origin"][2] = json!(stand);
+        }
+    }
+    d
+}
+
+/// Every solid of every tank, tilted as it is, clear of every other solid (apart from what overlaps at rest).
+fn no_tank_inside_a_solid(w: &World) -> bool {
+    (0..w.tanks.len()).all(|ti| !w.tank_in_solid(ti))
+}
+
+#[test]
+fn a_tank_standing_on_the_bund_cannot_tilt_into_it() {
+    let mut w = World::from_design(&design_on_stand(0.0), &Physics::default()).expect("the design is valid");
+    w.step(0.01, [0.0, 0.0, 0.0]);
+    // a hard knock on the tank: it would tilt, and its floor edge would go into the slab
+    w.tanks[0].omega = [0.0, 3.0];
+    let mut most = 0.0_f64;
+    for _ in 0..200 {
+        w.step(0.02, [0.0, 0.0, 0.0]);
+        most = most.max(w.tanks[0].theta[0].abs()).max(w.tanks[0].theta[1].abs());
+        assert!(no_tank_inside_a_solid(&w), "the tank is inside the bund at tilt {:?}", w.tanks[0].theta);
+    }
+    assert!(most < 0.02_f64.to_radians(), "the tank lies on the bund: it tilted {} degrees", most.to_degrees());
+}
+
+#[test]
+fn a_tank_on_a_stand_rocks_until_it_touches_the_bund_and_no_further() {
+    // half the tank's length is 600 mm: a 40 mm stand clears a tilt of atan(40 / 600), about 3.8 degrees
+    let stand = 40.0;
+    let mut w = World::from_design(&design_on_stand(stand), &Physics::default()).expect("the design is valid");
+    w.step(0.01, [0.0, 0.0, 0.0]);
+    w.tanks[0].omega = [0.0, 3.0];
+    let mut most = 0.0_f64;
+    for _ in 0..400 {
+        w.step(0.01, [0.0, 0.0, 0.0]);
+        most = most.max(w.tanks[0].theta[1].abs());
+        assert!(no_tank_inside_a_solid(&w), "the tank is inside the bund at tilt {:?}", w.tanks[0].theta);
+    }
+    let reach = (stand / 600.0_f64).atan();
+    assert!(most > 0.5 * reach, "the tank rocked only {} degrees", most.to_degrees());
+    assert!(most <= reach + 1e-3, "the tank tilted {} degrees, past where its edge meets the bund ({} degrees)", most.to_degrees(), reach.to_degrees());
+}
+
+#[test]
+fn the_jig_cannot_pass_through_equipment_that_is_not_a_tank() {
+    let mut d = design();
+    // a pipe run in the jig's path, a part whose name no list mentions
+    d["geometry"]["parts"].as_array_mut().expect("parts").push(json!({"name": "Pipework", "grounded": true, "bodies": [
+        {"name": "Pipe T2 supply", "kind": "box", "corner": [1000, -50, 1500], "size": [100, 100, 200]}]}));
+    let mut w = World::from_design(&d, &Physics { sway: false, ..Physics::default() }).expect("the design is valid");
+    w.step(0.01, [0.0, 0.0, 0.0]);
+    let mut out = w.step(0.01, [0.0, 0.0, 0.0]);
+    for i in 1..=120 {
+        out = w.step(0.05, [i as f64 * 25.0, 0.0, 0.0]);
+    }
+    // the jig is 800 wide: its edge meets the pipe at x 1000, so the carrier stops short of 600
+    assert!(out.carrier[0] < 600.0 && out.carrier[0] > 500.0, "the carrier went to {}", out.carrier[0]);
+    assert!(out.blocked[0], "{out:?}");
+    assert!(out.contact.as_deref().is_some_and(|c| c.contains("Pipe")), "{:?}", out.contact);
+}

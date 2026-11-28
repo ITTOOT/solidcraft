@@ -49,6 +49,7 @@ Every number is a setting (`physics::FIELDS` lists them with range and help text
 
 ## What it does not do
 
+- Every item is a hard line for every other. Every fixed part of the design (a part with `grounded: true`: the bund, rails, columns, piping, trays, equipment) and every tank is solid to the load, and what the load meets it stays outside of, with the contact margin between. A rocking tank tilts only until any part of it touches another solid (the bund, a neighbour, equipment beside it) and stops there; the speed into the solid is lost to the bounce. A pair that already overlaps at rest (equipment modelled fixed to a tank) is left out. A tank stands on its mounts clear of the bund: the design agent's `tank.standMm` (default 120 mm) gives a rocking tank room to tilt; a tank resting directly on the slab cannot tilt at all. The `physclear` example checks it on the real model: after every physics step it asks Solidcraft's `inspect.clearance` which bodies overlap and fails on any new overlap.
 - Contact is the exact oriented-box test in `physics.rs`, run on the design's solids. The `dynamics` crate (multibody solver) has no contacts and is not used.
 - Edits made in Solidcraft after the load are seen only after `physics.sync` (fixed solids and tank walls; boxes only, cylinders keep the design's numbers).
 - Run against a real PLC only in the simulator (PLCSIM Advanced): see "Run against a PLC" below.
